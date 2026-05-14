@@ -29,7 +29,7 @@ Within the first playable prototype, the player should be able to run, jump, fal
 - Player collision box: `14x28 px`, bottom-center anchored
 - Physics timestep: fixed `1/60 s`
 - World coordinates: pixel positions for entities, integer tile coordinates for terrain
-- Prototype chunk size: `32x32 tiles`, using signed chunk coordinates for future infinite generation
+- Prototype chunk size: `32x32 tiles`, using signed chunk coordinates for future horizontally unbounded generation and five-Band vertical progression
 
 ### Movement Tuning
 
@@ -389,7 +389,7 @@ Even though Sprint 3 owns UI, Sprint 1 needs inventory feedback:
 
 ### System Boundaries
 
-Sprint 1 should implement real gameplay logic, but keep world content tiny. The data model must already be compatible with infinite signed chunks so Sprint 2 does not require a rewrite.
+Sprint 1 should implement real gameplay logic, but keep world content tiny. The data model must already be compatible with signed chunks so Sprint 2 does not require a rewrite.
 
 Recommended systems:
 - `PlayerControllerSystem`
@@ -563,7 +563,7 @@ function addToInventory(inv: InventoryComponent, itemId: ItemId, count: number):
 
 ### Code Review Notes
 
-- Keep all physics on a fixed timestep. Variable timestep collision will create tunneling bugs, especially when the world becomes vertically infinite.
+- Keep all physics on a fixed timestep. Variable timestep collision will create tunneling bugs, especially when the world becomes horizontally unbounded and vertically deep.
 - Do not scan all nearby tiles every frame for mining. A short DDA/raycast is enough.
 - Do not use array indices based on global tile coordinates. Signed chunks prevent memory blowups when the player digs left, right, or downward forever.
 - Keep tile definitions immutable. Chunks store tile ids; damage and crack stages live in sparse runtime maps.
@@ -635,4 +635,3 @@ The following revisions are accepted after Player Persona feedback:
 4. Add inventory slots, pickup magnetism, and inventory delta events.
 5. Add crack overlays, dirt/stone particles, drill animation hooks, and sound event hooks.
 6. Validate movement and drilling feel with a 5-minute mining test.
-

@@ -5,7 +5,7 @@ Source references:
 - `Docs/Deepbound_Art_Bible.md`
 - `Docs/Sprints/Sprint_1_Core_Foundation.md`
 
-Sprint focus: infinite signed chunk generation, the first depth-to-biome transition, and a 47-tile bitmask autotiling pipeline that keeps fully destructible terrain readable after every excavation.
+Sprint focus: horizontally unbounded signed chunk generation, the first depth-to-Band transition, and a 47-tile bitmask autotiling pipeline that keeps fully destructible terrain readable after every excavation.
 
 ## Agent Stand-Up
 
@@ -21,7 +21,7 @@ Sprint focus: infinite signed chunk generation, the first depth-to-biome transit
 
 ### Sprint 2 Player Promise
 
-After Sprint 2, the player should be able to drill beyond the starter cave and feel the world change. The terrain should generate deterministically in signed chunks, caverns should remain navigable, the Colossal Ant Chambers should emerge at depth, and every broken block should visually reconnect through autotiling.
+After Sprint 2, the player should be able to drill beyond the starter cave and feel the world change. The terrain should generate deterministically in signed chunks, caverns should remain navigable, the Colossal Ant Chambers should emerge as Band 2, and every broken block should visually reconnect through autotiling.
 
 ### Core World Rules
 
@@ -29,6 +29,8 @@ After Sprint 2, the player should be able to drill beyond the starter cave and f
 - Chunk size: `32x32 tiles`
 - Chunk coordinates: signed integers, with `chunkY` increasing downward
 - Tile coordinates: signed integers, with `tileY` increasing downward
+- Horizontal chunking remains unbounded
+- Vertical generation follows five mapped Bands and clamps to Solid Dark Blocks at `tileY >= 1920`
 - Generation must be deterministic from `worldSeed`, `chunkX`, and `chunkY`
 - Chunks generate independently but may sample a one-tile neighbor margin for seams
 - Foreground terrain, background walls, ores, and decorative decals are separate layers
@@ -39,12 +41,16 @@ Depth bands:
 | --- | ---: | --- | --- |
 | Surface Crust | `-64` to `-1` | barren crust | Spawn cap and return landmark only |
 | Standard Caverns | `0` to `383` | dirt, stone, open caves | Sprint 1 terrain extended into a real world |
-| Ant Transition | `384` to `511` | 60% caverns, 40% ant influence | Warm palette shift, first resin seams |
-| Colossal Ant Chambers | `512+` | resin, excavated earth, large rooms | First signature biome and resource fantasy |
+| Ant Transition | `320` to `383` | 60% caverns, 40% ant influence | Warm palette shift, first resin seams |
+| Colossal Ant Chambers | `384` to `767` | resin, excavated earth, large rooms | First signature biome and resource fantasy |
+| Buried Pyramids | `768` to `1151` | sandstone, tomb rooms | Trap-heavy Band 3 |
+| Drow Enclaves | `1152` to `1535` | glow flora, shadow cities | Diplomacy and ambush Band 4 |
+| Abyssal Lava Rivers / Obsidian Slums | `1536` to `1919` | obsidian, lava, settlements | Heat and endgame Band 5 |
+| Solid Dark Blocks | `1920+` | ultra-dense dark matter | Late-game boundary |
 
 Biome pacing:
-- The first ant visual hint appears no earlier than `tileY = 360`.
-- The first full ant chamber room appears no earlier than `tileY = 512`.
+- The first ant visual hint appears no earlier than `tileY = 320`.
+- The first full ant chamber room appears no earlier than `tileY = 384`.
 - Transition chunks must contain normal stone/dirt anchors so the shift feels discovered, not teleported.
 - A player descending at early-game speed should see the full transition over roughly `2-4 minutes`.
 
@@ -88,7 +94,7 @@ Colossal Ant Chambers:
 Ant influence formula:
 
 ```txt
-depthBlend = smoothstep(384, 512, tileY)
+depthBlend = smoothstep(320, 384, tileY)
 organicNoise = fbm(tileX * 0.018 + 73, tileY * 0.018 - 29, 3)
 antWeight = clamp(depthBlend * 0.82 + organicNoise * 0.18, 0, 1)
 ```
@@ -132,7 +138,15 @@ interface TileCoord {
   y: number;
 }
 
-type BiomeId = "surface_crust" | "standard_caverns" | "ant_transition" | "colossal_ant_chambers";
+type BiomeId =
+  | "surface_crust"
+  | "standard_caverns"
+  | "ant_transition"
+  | "colossal_ant_chambers"
+  | "buried_pyramids"
+  | "drow_enclaves"
+  | "abyssal_lava_slums"
+  | "solid_dark_blocks";
 
 interface BiomeBand {
   biomeId: BiomeId;
@@ -362,15 +376,19 @@ Biome resolution:
 
 ```ts
 function resolveBiomeWeights(tileY: number, worldSeed: number, tileX: number): Record<BiomeId, number> {
-  const antDepth = smoothstep(384, 512, tileY);
+  const antDepth = smoothstep(320, 384, tileY);
   const lateralVariation = noise2(worldSeed, tileX * 0.01, tileY * 0.01) * 0.18;
   const ant = clamp(antDepth + lateralVariation, 0, 1);
 
   return {
     surface_crust: tileY < 0 ? 1 : 0,
     standard_caverns: clamp(1 - ant, 0, 1),
-    ant_transition: tileY >= 384 && tileY < 512 ? clamp(1 - Math.abs(ant - 0.5) * 2, 0, 1) : 0,
-    colossal_ant_chambers: tileY >= 512 ? ant : 0
+    ant_transition: tileY >= 320 && tileY < 384 ? clamp(1 - Math.abs(ant - 0.5) * 2, 0, 1) : 0,
+    colossal_ant_chambers: tileY >= 384 && tileY < 768 ? ant : 0,
+    buried_pyramids: tileY >= 768 && tileY < 1152 ? 1 : 0,
+    drow_enclaves: tileY >= 1152 && tileY < 1536 ? 1 : 0,
+    abyssal_lava_slums: tileY >= 1536 && tileY < 1920 ? 1 : 0,
+    solid_dark_blocks: tileY >= 1920 ? 1 : 0
   };
 }
 ```
@@ -445,7 +463,7 @@ This sprint starts to make Deepbound feel like its own game. The key win is that
 
 The risk is visual soup. Brown dirt, amber resin, yellow pheromones, and glowing ore can collapse into one warm smear if the values are too close. The stone anchors and bright ore cores are essential.
 
-The transition pacing is promising. Seeing hints around `tileY 360`, then a full chamber past `512`, gives the player time to wonder what is below. If the game throws resin everywhere too early, the descent loses drama.
+The transition pacing is promising. Seeing hints around `tileY 320`, then a full chamber past `384`, gives the player time to wonder what is below. If the game throws resin everywhere too early, the descent loses drama.
 
 Autotiling is invisible when it works and ugly when it fails. Broken blocks need clean edges immediately. A single wrong diagonal corner after drilling will be more noticeable than a missing decorative decal.
 
@@ -465,7 +483,7 @@ The following revisions are accepted after Player Persona feedback:
 
 1. Standard stone remains as a cool-value anchor inside ant transition chunks.
 2. Glowing ore coverage is capped per screen and uses brighter cores than resin highlights.
-3. Full Colossal Ant Chambers are delayed until `tileY >= 512`, with visual hints beginning near `tileY = 360`.
+3. Full Colossal Ant Chambers begin at `tileY >= 384`, with visual hints beginning near `tileY = 320`.
 4. Autotile updates recompute the changed tile and its `3x3` neighborhood immediately after destruction.
 5. Parallax layers are required for ant chambers, not optional polish.
 
@@ -474,8 +492,9 @@ The following revisions are accepted after Player Persona feedback:
 - Chunks use signed `32x32` coordinates with `tileY` increasing downward.
 - Generation is deterministic from `worldSeed`, `chunkX`, and `chunkY`.
 - Standard caverns generate from `tileY 0-383`.
-- Ant transition appears from `tileY 384-511`.
-- Colossal Ant Chambers appear from `tileY 512+`.
+- Ant transition appears from `tileY 320-383`.
+- Colossal Ant Chambers appear from `tileY 384-767`.
+- Vertical generation clamps to Solid Dark Blocks at `tileY >= 1920`.
 - Resin, excavated earth, pheromone decals, and amber glowing ores are specified.
 - 47-tile autotiling uses 8-neighbor masks with cardinal-gated corners.
 - Excavation marks a `3x3` dirty autotile neighborhood.
@@ -501,5 +520,4 @@ The following revisions are accepted after Player Persona feedback:
 5. Add material replacement, glowing ore rules, background wall rules, and decor decals.
 6. Implement 47-tile mask computation and dirty-neighborhood updates.
 7. Add parallax resolver data for cavern and ant chamber backgrounds.
-8. Run visual checks at `tileY 320`, `384`, `512`, and `640`.
-
+8. Run visual checks at `tileY 320`, `384`, `768`, `1152`, `1536`, and `1920`.

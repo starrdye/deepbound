@@ -18,10 +18,15 @@
 * **Parallax Depth:** The deep background (behind the playable layer) should consist of 3 to 5 distinct parallax layers that scroll at different speeds to give the cavernous voids a sense of massive scale.
 
 ## 4. Biome Aesthetic Guidelines
+The commercial art direction uses five strict horizontal Band palettes. Each Band must remain readable at `300%` and `400%` integer scale, with high-value interactive objects popping against darker terrain and walls.
+
+* **Band 1: Standard Caverns:** Earth browns, cool stone grays, brass lamp accents, and small copper highlights. Keep shapes familiar and readable.
 * **The Colossal Ant Chambers:** Warm, sickly colors. Amber, mustard yellow, and deep resin browns. Tiles should look organic, rounded, and slightly translucent.
 * **Buried Pyramids:** Desaturated sand tones, cracked sandstone, and oxidized copper greens. Sharp, geometric, right-angled tiles contrasting with the natural caves.
-* **The Abyssal Lava Rivers:** Harsh, aggressive lighting. Pitch-black obsidian tiles cracked with glowing crimson and neon orange. Heat-distortion shader effects near the lava surface.
 * **Drow Enclaves:** Cool, ethereal palettes. Deep indigo, bioluminescent cyan, and violet. Flora should emit soft glow maps, making the environment the primary light source.
+* **The Abyssal Lava Rivers:** Harsh, aggressive lighting. Pitch-black obsidian tiles cracked with glowing crimson and neon orange. Heat-distortion shader effects near the lava surface.
+* **The Obsidian Slums:** A subregion of Band 5. Use forged scrap silhouettes, hanging settlements, lava-lit edges, and hostile industrial UI motifs.
+* **Solid Dark Blocks:** Near-black blue-violet material with tiny cold highlights. They absorb light and should look heavy, ancient, and almost unreadable without becoming pure black rectangles.
 
 ## 5. Character & Entity Design
 * **The Player ("Delver"):** Requires a modular sprite system. The base body template must be divided into Head, Torso, Arms, and Legs to allow overlapping armor sprites. 

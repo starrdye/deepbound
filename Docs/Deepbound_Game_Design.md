@@ -7,18 +7,18 @@
 
 ## 2. Core Mechanics
 
-### 2.1 Infinite Vertical & Horizontal Generation
-Unlike traditional sandbox games with a set "bottom" (like bedrock or the Underworld), *Deepbound* generates infinitely downward and horizontally. 
-* **Depth Tiers:** As the player descends, the pressure, heat, and hostility of the environment increase, requiring specialized gear (e.g., pressure suits, heat-resistant plating, reinforced drills).
-* **Total Destructibility:** Every block, structure, and obstacle can be mined, blown up, or manipulated. 
+### 2.1 The Mapped Descent: 5 Horizontal Bands
+In-world legends still describe the deep as infinite, but the commercial game focuses on the known mapped descent: five strict horizontal Bands and a final late-game boundary of Solid Dark Blocks. Horizontal generation remains unbounded so the player can keep exploring left and right, while vertical progression is paced through authored ecosystems.
+* **Band 1: Standard Caverns (`tileY 0-383`):** Dirt, compacted earth, soft stone, copper, starter skitters, and the first light-management pressure.
+* **Band 2: Colossal Ant Chambers (`tileY 384-767`):** Resin structures, excavated earth, pheromone trails, royal jelly pockets, and caste-based enemies.
+* **Band 3: Buried Pyramids (`tileY 768-1151`):** Sandstone tomb networks, traps, cursed treasure, and mummy patrols.
+* **Band 4: Drow Enclaves (`tileY 1152-1535`):** Bioluminescent mushroom forests, shadow cities, diplomacy pressure, and ambush hunters.
+* **Band 5: Abyssal Lava Rivers / Obsidian Slums (`tileY 1536-1919`):** Magma highways, heat pressure, obsidian settlements, and hostile outcasts.
+* **Solid Dark Blocks (`tileY >= 1920`):** Ultra-dense, light-absorbing material that forms the final boundary and late-game mystery.
+* **Total Destructibility:** Most foreground terrain can be mined, blown up, or manipulated. Solid Dark Blocks are the exception: they are a narrative and mechanical boundary until Phase 3 late-game systems.
 
-### 2.2 Subterranean Ecosystems (Biomes)
-The underground is not just dirt and stone; it is composed of massive, interconnected biomes and chambers.
-* **The Colossal Ant Chambers:** Massive network of pheromone-lined tunnels. Players can harvest royal jelly, but risk awakening the Soldier Caste or the Queen. Blocks here are made of hardened resin and excavated earth.
-* **Buried Pyramids:** Lost desert civilizations swallowed by the earth. Trapped corridors, cursed treasure rooms, and lost mummies wandering the dark.
-* **The Abyssal Lava Rivers:** Deep, flowing rivers of magma that serve as highways for heat-adapted creatures.
-* **The Obsidian Slums (Evil Village):** Settlements built hanging from the stalactites over lava rivers, populated by exiled demons and hostile outcasts.
-* **Drow Enclaves:** Bioluminescent mushroom forests hiding elegant, shadowy cities. Drow NPCs can be traded with, but their faction requires careful diplomacy, or they will hunt the player in the dark.
+### 2.2 Subterranean Ecosystems
+The underground is not just dirt and stone; each Band has its own ecology, hazards, palette, resources, enemies, and boss arc. Earlier biome concepts are preserved as Band identities or subregions inside the mapped descent.
 
 ## 3. Gameplay Systems
 

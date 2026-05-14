@@ -7,3 +7,6 @@ coverage/
 .env
 .env.local
 npm-debug.log*
+deepbound_godot/.godot/
+deepbound_godot/export/
+deepbound_godot/*.tmp

@@ -6,7 +6,7 @@ Deepbound is a 2D pixel-art sandbox adventure prototype about drilling downward 
 
 This repository now contains:
 
-- A Phaser + Vite + TypeScript browser vertical slice.
+- A Phaser + Vite + TypeScript browser vertical slice in `prototype/`.
 - Deterministic chunk generation for the five-Band world model.
 - Band 1 movement, collision, mining, drops, inventory, lighting, starter enemy pressure, and SVG HUD.
 - Vitest coverage for Band boundaries, chunk generation, mining, economy, lighting, and HUD state.
@@ -15,6 +15,7 @@ This repository now contains:
 ## Run
 
 ```bash
+cd prototype
 npm install
 npm run dev
 ```
@@ -24,6 +25,7 @@ Open the local Vite URL printed in the terminal.
 ## Verify
 
 ```bash
+cd prototype
 npm test
 npm run build
 ```
@@ -34,4 +36,3 @@ npm run build
 - Jump: `W`, up arrow, or space
 - Drill: hold mouse/touch or `F`
 - Strike starter hostile: `E`
-

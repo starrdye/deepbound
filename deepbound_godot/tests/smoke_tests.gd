@@ -55,8 +55,12 @@ func _test_mining_inventory() -> void:
 	store.set_tile(target, "loose_dirt")
 	var partial := mining.mine_tile(store, target, inventory, 0.25, 0.0)
 	_assert(not partial.broke, "first mining tick should damage but not break")
+	_assert(int(partial.stage) > 0, "damaged tile should report a visible break stage")
+	var heavier_damage := mining.mine_tile(store, target, inventory, 0.25, 0.0)
+	_assert(int(heavier_damage.stage) >= int(partial.stage), "break stage should increase or hold as damage accumulates")
 	var broken := mining.mine_tile(store, target, inventory, 2.0, 0.0)
 	_assert(broken.broke, "second mining tick should break loose dirt")
+	_assert(int(broken.stage) == MiningSystem.BREAK_STAGE_COUNT, "broken tile should report final break stage")
 	_assert(store.get_tile(target) == "air", "broken tile should become air")
 	_assert(inventory.count_item("dirt_clod") == 1, "broken dirt should enter inventory")
 
@@ -85,4 +89,3 @@ func _test_sprint_4_5_hooks() -> void:
 	_assert(jelly_seen, "Sprint 4 should generate royal jelly hooks")
 	_assert(band3_seen, "Sprint 5 should generate Band 3 sandstone")
 	_assert(treasure_seen, "Sprint 5 should generate cursed treasure hooks")
-

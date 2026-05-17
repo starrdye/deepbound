@@ -1,4 +1,8 @@
 .godot/
 export/
+*.import
 *.tmp
 *.translation
+*.uid
+__pycache__/
+*.pyc

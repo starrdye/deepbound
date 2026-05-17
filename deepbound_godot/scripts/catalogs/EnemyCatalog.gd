@@ -8,6 +8,15 @@ const ENEMIES := {
 	"mummy_sentry": {"name": "Mummy Sentry", "band": "buried_pyramids", "health": 72, "damage": 18, "speed": 25.0, "aggro_tiles": 7, "color": Color8(210, 179, 106)}
 }
 
+const COLLIDERS := {
+	"cave_skitter": {"width": 14.0, "height": 10.0},
+	"worker_ant": {"width": 18.0, "height": 10.0},
+	"soldier_ant": {"width": 22.0, "height": 12.0},
+	"mummy_sentry": {"width": 14.0, "height": 28.0},
+	"tunneling_worm_head": {"width": 26.0, "height": 18.0},
+	"tunneling_worm_segment": {"width": 12.0, "height": 12.0}
+}
+
 const BOSSES := {
 	"rootbound_foreman": {"band": "standard_caverns", "health": 420, "damage": 18, "unlock": "copper_brace"},
 	"amber_queen": {"band": "colossal_ant_chambers", "health": 760, "damage": 26, "unlock": "royal_jelly"},
@@ -19,3 +28,5 @@ const BOSSES := {
 static func get_enemy(enemy_id: String) -> Dictionary:
 	return ENEMIES.get(enemy_id, ENEMIES.cave_skitter)
 
+static func get_collider(enemy_id: String) -> Dictionary:
+	return COLLIDERS.get(enemy_id, COLLIDERS.cave_skitter)

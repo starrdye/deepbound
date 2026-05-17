@@ -1,0 +1,225 @@
+extends SceneTree
+
+const TextureFactory = preload("res://scripts/factories/TextureFactory.gd")
+
+var failures: Array[String] = []
+
+const TILE_IDS := [
+	"loose_dirt",
+	"compacted_dirt",
+	"soft_stone",
+	"copper_ore",
+	"hardened_resin",
+	"royal_jelly",
+	"sandstone_block",
+	"pressure_plate",
+	"cursed_treasure",
+	"glow_mushroom_loam",
+	"obsidian_ash",
+	"solid_dark_block"
+]
+
+const ENEMY_IDS := [
+	"cave_skitter",
+	"worker_ant",
+	"soldier_ant",
+	"mummy_sentry",
+	"tunneling_worm_head",
+	"tunneling_worm_segment",
+	"rootbound_foreman",
+	"amber_queen",
+	"pharaoh_of_buried_sun",
+	"drow_matriarch",
+	"obsidian_baron"
+]
+
+const ITEM_IDS := [
+	"dirt_clod",
+	"stone_chunk",
+	"copper_nugget",
+	"resin_shard",
+	"royal_jelly",
+	"sandstone_shard",
+	"cursed_relic",
+	"glow_spore",
+	"drow_silk",
+	"obsidian_chip",
+	"heat_core",
+	"dark_block_sliver",
+	"copper_brace",
+	"resin_seal",
+	"tomb_key"
+]
+
+const UI_IDS := [
+	"health",
+	"heart_full",
+	"heart_half",
+	"heart_empty",
+	"drill_heat",
+	"quickbar_slot",
+	"quickbar_selected",
+	"inventory_slot",
+	"flare_bundle",
+	"outpost_beacon",
+	"copper_brace",
+	"resin_seal",
+	"tomb_key",
+	"light",
+	"danger_pulse"
+]
+
+const UI_SHEETS := {
+	"heart_sheet": Vector2i(48, 16)
+}
+
+const EFFECT_IDS := [
+	"tile_crack_1",
+	"tile_crack_2",
+	"tile_crack_3",
+	"tile_break_stage_1",
+	"tile_break_stage_2",
+	"tile_break_stage_3",
+	"tile_break_stage_4",
+	"tile_break_stage_5",
+	"tile_breaking_sheet",
+	"drill_impact_spark",
+	"pickup_magnet",
+	"worm_telegraph_crescent",
+	"worm_dust_crack",
+	"enemy_hit_flash"
+]
+
+const BREAK_TILE_IDS := [
+	"loose_dirt",
+	"compacted_dirt",
+	"soft_stone",
+	"copper_ore",
+	"hardened_resin",
+	"royal_jelly",
+	"sandstone_block",
+	"pressure_plate",
+	"cursed_treasure",
+	"glow_mushroom_loam",
+	"obsidian_ash"
+]
+
+const PROP_IDS := [
+	"flare",
+	"outpost_beacon",
+	"dart_trap",
+	"dart_projectile",
+	"pressure_plate_depressed",
+	"chest_closed",
+	"chest_open",
+	"chest_open_sheet"
+]
+
+const SOURCE_AI_IDS := [
+	"villager_delver_ai_reference",
+	"enemy_roster_ai_reference",
+	"world_asset_ai_reference",
+	"drow_village_tiles_ai_reference",
+	"chest_heart_ai_reference"
+]
+
+func _initialize() -> void:
+	call_deferred("_run")
+
+func _assert(condition: bool, message: String) -> void:
+	if not condition:
+		failures.append(message)
+		push_error(message)
+
+func _run() -> void:
+	_test_source_art_boards()
+	_test_player_sheet()
+	_test_tiles()
+	_test_enemies()
+	_test_items()
+	_test_ui()
+	_test_effects_and_props()
+	if failures.is_empty():
+		print("Deepbound Godot asset tests passed.")
+		quit(0)
+	else:
+		print("Deepbound Godot asset tests failed: %d" % failures.size())
+		quit(1)
+
+func _test_source_art_boards() -> void:
+	for source_id in SOURCE_AI_IDS:
+		var path := "res://assets/source_ai/%s.png" % source_id
+		_assert(FileAccess.file_exists(path), "missing ChatGPT art-board source %s" % path)
+
+func _test_player_sheet() -> void:
+	var texture := TextureFactory.make_delver_sprite_sheet()
+	_assert(texture != null, "delver villager sheet should load")
+	_assert(texture.get_width() == 256 and texture.get_height() == 224, "delver villager sheet should be 8x7 32px frames including weapon swing")
+
+func _test_tiles() -> void:
+	for tile_id in TILE_IDS:
+		var path := "res://assets/tiles/%s.png" % tile_id
+		_assert(FileAccess.file_exists(path), "missing tile asset %s" % path)
+		var texture := TextureFactory.make_tile_texture(tile_id, {"color": Color.WHITE, "highlight": Color.WHITE})
+		_assert(texture != null, "tile texture should load for %s" % tile_id)
+		_assert(texture.get_width() == 16 and texture.get_height() == 16, "tile %s should be 16x16" % tile_id)
+
+func _test_enemies() -> void:
+	for enemy_id in ENEMY_IDS:
+		var path := "res://assets/enemies/%s.png" % enemy_id
+		_assert(FileAccess.file_exists(path), "missing enemy asset %s" % path)
+		var texture := TextureFactory.make_enemy_texture(enemy_id)
+		_assert(texture != null, "enemy texture should load for %s" % enemy_id)
+		_assert(texture.get_width() == 256 and texture.get_height() == 128, "enemy %s should be an 8x4 32px modular move sheet" % enemy_id)
+
+func _test_items() -> void:
+	for item_id in ITEM_IDS:
+		var path := "res://assets/items/%s.png" % item_id
+		_assert(FileAccess.file_exists(path), "missing item asset %s" % path)
+		var texture := TextureFactory.make_item_texture(item_id)
+		_assert(texture != null, "item texture should load for %s" % item_id)
+		_assert(texture.get_width() == 16 and texture.get_height() == 16, "item %s should be 16x16" % item_id)
+
+func _test_ui() -> void:
+	for icon_id in UI_IDS:
+		var path := "res://assets/ui/%s.png" % icon_id
+		_assert(FileAccess.file_exists(path), "missing UI asset %s" % path)
+		var texture := TextureFactory.make_ui_texture(icon_id)
+		_assert(texture != null, "UI texture should load for %s" % icon_id)
+		_assert(texture.get_width() == 16 and texture.get_height() == 16, "UI icon %s should be 16x16" % icon_id)
+	for sheet_id in UI_SHEETS:
+		var path := "res://assets/ui/%s.png" % sheet_id
+		_assert(FileAccess.file_exists(path), "missing UI sheet %s" % path)
+		var texture := TextureFactory.make_ui_texture(sheet_id)
+		var expected: Vector2i = UI_SHEETS[sheet_id]
+		_assert(texture != null, "UI sheet should load for %s" % sheet_id)
+		_assert(texture.get_width() == expected.x and texture.get_height() == expected.y, "UI sheet %s should be %dx%d" % [sheet_id, expected.x, expected.y])
+
+func _test_effects_and_props() -> void:
+	for effect_id in EFFECT_IDS:
+		var path := "res://assets/effects/%s.png" % effect_id
+		_assert(FileAccess.file_exists(path), "missing effect asset %s" % path)
+		var texture := TextureFactory.make_effect_texture(effect_id)
+		_assert(texture != null, "effect texture should load for %s" % effect_id)
+		if effect_id == "tile_breaking_sheet":
+			_assert(texture.get_width() == 80 and texture.get_height() == 16, "tile breaking sheet should be five 16x16 stages")
+		elif effect_id.begins_with("tile_break_stage_") or effect_id.begins_with("tile_crack_"):
+			_assert(texture.get_width() == 16 and texture.get_height() == 16, "%s should be a 16x16 transparent overlay" % effect_id)
+	for tile_id in BREAK_TILE_IDS:
+		var effect_id := "tile_breaking_%s_sheet" % tile_id
+		var path := "res://assets/effects/%s.png" % effect_id
+		_assert(FileAccess.file_exists(path), "missing material breaking sheet %s" % path)
+		var texture := TextureFactory.make_effect_texture(effect_id)
+		_assert(texture != null, "material breaking sheet should load for %s" % tile_id)
+		_assert(texture.get_width() == 80 and texture.get_height() == 16, "%s should be five 16x16 material break stages" % effect_id)
+	for prop_id in PROP_IDS:
+		var path := "res://assets/props/%s.png" % prop_id
+		_assert(FileAccess.file_exists(path), "missing prop asset %s" % path)
+		var texture := TextureFactory.make_prop_texture(prop_id)
+		_assert(texture != null, "prop texture should load for %s" % prop_id)
+		if prop_id == "chest_open_sheet":
+			_assert(texture.get_width() == 256 and texture.get_height() == 32, "chest_open_sheet should be eight 32x32 frames")
+		elif prop_id.begins_with("chest_"):
+			_assert(texture.get_width() == 32 and texture.get_height() == 32, "%s should be 32x32" % prop_id)
+		else:
+			_assert(texture.get_width() == 16 and texture.get_height() == 16, "%s should be 16x16" % prop_id)

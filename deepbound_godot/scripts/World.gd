@@ -8,6 +8,7 @@ const MiningSystem = preload("res://scripts/systems/MiningSystem.gd")
 const TextureFactory = preload("res://scripts/factories/TextureFactory.gd")
 
 const TILE_SIZE := 16
+const BREAK_STAGE_COUNT := 5
 
 @export var player_path: NodePath
 
@@ -45,7 +46,7 @@ func is_solid_tile(tile: Vector2i) -> bool:
 
 func mine_at(tile: Vector2i, inventory, delta: float, drill_heat := 0.0) -> Dictionary:
 	var result := mining.mine_tile(store, tile, inventory, delta, drill_heat)
-	if result.broke:
+	if bool(result.broke) or float(result.get("progress", 0.0)) > 0.0:
 		queue_redraw()
 	return result
 
@@ -96,11 +97,7 @@ func _draw() -> void:
 			var rect := Rect2(Vector2(x * TILE_SIZE, y * TILE_SIZE), Vector2(TILE_SIZE, TILE_SIZE))
 			draw_texture_rect(texture, rect, false)
 			_draw_autotile_edges(tile, rect, tile_def)
-			var progress := store.get_damage(tile)
-			if progress > 0.0:
-				draw_line(rect.position + Vector2(4, 3), rect.position + Vector2(11, 13), Color8(255, 224, 161), 1.0)
-				if progress / float(tile_def.hardness) > 0.5:
-					draw_line(rect.position + Vector2(11, 7), rect.position + Vector2(3, 12), Color8(214, 176, 113), 1.0)
+			_draw_tile_break_overlay(tile, rect, tile_def)
 
 	for beacon in beacons:
 		draw_circle(beacon, 9.0, Color8(255, 214, 107, 120))
@@ -109,12 +106,33 @@ func _draw() -> void:
 		draw_circle(flare.position, 5.0, Color8(255, 138, 31, 170))
 
 func _draw_autotile_edges(tile: Vector2i, rect: Rect2, tile_def: Dictionary) -> void:
-	var edge_color := Color(tile_def.highlight, 0.55)
+	var edge_color := Color(tile_def.highlight, 0.32)
+	var shadow_color := Color(tile_def.color, 0.48)
 	if get_tile(tile + Vector2i(0, -1)) == "air":
-		draw_line(rect.position, rect.position + Vector2(TILE_SIZE, 0), edge_color)
+		draw_line(rect.position + Vector2(2, 1), rect.position + Vector2(TILE_SIZE - 3, 1), edge_color)
 	if get_tile(tile + Vector2i(0, 1)) == "air":
-		draw_line(rect.position + Vector2(0, TILE_SIZE - 1), rect.position + Vector2(TILE_SIZE, TILE_SIZE - 1), edge_color)
+		draw_line(rect.position + Vector2(2, TILE_SIZE - 2), rect.position + Vector2(TILE_SIZE - 3, TILE_SIZE - 2), shadow_color)
 	if get_tile(tile + Vector2i(-1, 0)) == "air":
-		draw_line(rect.position, rect.position + Vector2(0, TILE_SIZE), edge_color)
+		draw_line(rect.position + Vector2(1, 2), rect.position + Vector2(1, TILE_SIZE - 3), edge_color)
 	if get_tile(tile + Vector2i(1, 0)) == "air":
-		draw_line(rect.position + Vector2(TILE_SIZE - 1, 0), rect.position + Vector2(TILE_SIZE - 1, TILE_SIZE), edge_color)
+		draw_line(rect.position + Vector2(TILE_SIZE - 2, 2), rect.position + Vector2(TILE_SIZE - 2, TILE_SIZE - 3), shadow_color)
+
+func _draw_tile_break_overlay(tile: Vector2i, rect: Rect2, tile_def: Dictionary) -> void:
+	var damage := store.get_damage(tile)
+	if damage <= 0.0 or not bool(tile_def.breakable):
+		return
+	var progress_ratio: float = clampf(damage / float(tile_def.hardness), 0.0, 0.999)
+	var stage_index := clampi(ceili(progress_ratio * BREAK_STAGE_COUNT) - 1, 0, BREAK_STAGE_COUNT - 1)
+	var sheet := TextureFactory.make_effect_texture("tile_breaking_%s_sheet" % String(tile_def.get("id", get_tile(tile))))
+	if sheet == null:
+		sheet = TextureFactory.make_effect_texture("tile_breaking_sheet")
+	if sheet != null:
+		draw_texture_rect_region(
+			sheet,
+			rect,
+			Rect2(Vector2(stage_index * TILE_SIZE, 0), Vector2(TILE_SIZE, TILE_SIZE))
+		)
+		return
+	draw_line(rect.position + Vector2(4, 3), rect.position + Vector2(11, 13), Color8(255, 224, 161), 1.0)
+	if stage_index >= 2:
+		draw_line(rect.position + Vector2(11, 7), rect.position + Vector2(3, 12), Color8(214, 176, 113), 1.0)

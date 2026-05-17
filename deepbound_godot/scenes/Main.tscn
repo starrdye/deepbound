@@ -12,6 +12,10 @@ script = ExtResource("1_main")
 script = ExtResource("2_world")
 player_path = NodePath("../Player")
 
+[node name="Props" type="Node2D" parent="."]
+
+[node name="Drops" type="Node2D" parent="."]
+
 [node name="Player" type="Node2D" parent="."]
 position = Vector2(-128, 208)
 script = ExtResource("3_player")
@@ -38,4 +42,3 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("4_hud")
-

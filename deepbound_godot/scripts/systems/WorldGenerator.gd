@@ -2,6 +2,8 @@ extends RefCounted
 class_name WorldGenerator
 
 const BandCatalog = preload("res://scripts/catalogs/BandCatalog.gd")
+const BackgroundCatalog = preload("res://scripts/catalogs/BackgroundCatalog.gd")
+const StructureGenerator = preload("res://scripts/systems/StructureGenerator.gd")
 const CHUNK_SIZE := 32
 
 static func hash_i(value: int) -> int:
@@ -77,9 +79,54 @@ static func generate_tile_id(seed: int, tile: Vector2i) -> String:
 			return "solid_dark_block"
 
 static func generate_chunk(seed: int, chunk: Vector2i) -> Array[String]:
+	if chunk.y < 0:
+		return _filled_chunk("air")
 	var tiles: Array[String] = []
 	for local_y in CHUNK_SIZE:
 		for local_x in CHUNK_SIZE:
 			var tile := Vector2i(chunk.x * CHUNK_SIZE + local_x, chunk.y * CHUNK_SIZE + local_y)
 			tiles.append(generate_tile_id(seed, tile))
+	if not _chunk_can_contain_band1_structure(chunk):
+		return tiles
+	return StructureGenerator.apply_structure_tiles(seed, chunk, tiles)
+
+static func generate_background_id(seed: int, tile: Vector2i) -> String:
+	if tile.y < 0 or tile.y >= BandCatalog.SOLID_DARK_START_TILE_Y:
+		return BackgroundCatalog.EMPTY_ID
+	var n := noise01(seed + 9091, tile.x, tile.y)
+	match BandCatalog.resolve_band_id(tile.y):
+		"standard_caverns":
+			if tile.y < 96:
+				return "dirt_background_block" if n > 0.18 else "stone_background_block"
+			return "stone_background_block" if n > 0.24 else "dirt_background_block"
+		"colossal_ant_chambers":
+			return "dirt_background_block" if n > 0.36 else "stone_background_block"
+		"buried_pyramids":
+			return "stone_background_block"
+		"drow_enclaves":
+			return "stone_background_block"
+		"abyssal_lava_slums":
+			return "stone_background_block"
+		_:
+			return BackgroundCatalog.EMPTY_ID
+
+static func generate_background_chunk(seed: int, chunk: Vector2i) -> Array[String]:
+	if chunk.y < 0:
+		return _filled_chunk(BackgroundCatalog.EMPTY_ID)
+	var backgrounds: Array[String] = []
+	for local_y in CHUNK_SIZE:
+		for local_x in CHUNK_SIZE:
+			var tile := Vector2i(chunk.x * CHUNK_SIZE + local_x, chunk.y * CHUNK_SIZE + local_y)
+			backgrounds.append(generate_background_id(seed, tile))
+	return backgrounds
+
+static func _filled_chunk(tile_id: String) -> Array[String]:
+	var tiles: Array[String] = []
+	tiles.resize(CHUNK_SIZE * CHUNK_SIZE)
+	tiles.fill(tile_id)
 	return tiles
+
+static func _chunk_can_contain_band1_structure(chunk: Vector2i) -> bool:
+	var min_y := chunk.y * CHUNK_SIZE
+	var max_y := min_y + CHUNK_SIZE - 1
+	return max_y >= StructureGenerator.BAND1_MIN_Y and min_y <= StructureGenerator.BAND1_MAX_Y

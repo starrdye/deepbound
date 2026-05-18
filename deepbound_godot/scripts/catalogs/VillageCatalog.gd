@@ -23,6 +23,22 @@ const DROW_PROP_IDS := [
 	"drow_web_bridge"
 ]
 
+const GOBLIN_TILE_IDS := [
+	"goblin_timber_wall",
+	"goblin_packed_floor",
+	"goblin_hide_canopy"
+]
+
+const GOBLIN_PROP_IDS := [
+	"goblin_bone_altar",
+	"goblin_crate",
+	"goblin_cage",
+	"goblin_torch",
+	"goblin_banner",
+	"goblin_door_flap",
+	"goblin_palisade_post"
+]
+
 const DROW_SYMBOLS := {
 	".": {"kind": "empty", "id": "air"},
 	"#": {"kind": "tile", "id": "drow_basalt_brick"},
@@ -40,6 +56,24 @@ const DROW_SYMBOLS := {
 	"O": {"kind": "prop", "id": "drow_mushroom_lamp"},
 	"|": {"kind": "prop", "id": "drow_bridge_post"},
 	"~": {"kind": "prop", "id": "drow_web_bridge"}
+}
+
+const GOBLIN_SYMBOLS := {
+	"_": {"kind": "ignore", "id": ""},
+	".": {"kind": "empty", "id": "air"},
+	"#": {"kind": "tile", "id": "goblin_timber_wall"},
+	"=": {"kind": "tile", "id": "goblin_packed_floor"},
+	"^": {"kind": "tile", "id": "goblin_hide_canopy"},
+	"P": {"kind": "prop", "id": "goblin_palisade_post"},
+	"A": {"kind": "prop", "id": "goblin_bone_altar"},
+	"C": {"kind": "prop", "id": "goblin_crate"},
+	"X": {"kind": "prop", "id": "goblin_cage"},
+	"T": {"kind": "prop", "id": "goblin_torch"},
+	"B": {"kind": "prop", "id": "goblin_banner"},
+	"D": {"kind": "prop", "id": "goblin_door_flap"},
+	"g": {"kind": "spawn", "id": "goblin_grunt"},
+	"s": {"kind": "spawn", "id": "goblin_slinger"},
+	"m": {"kind": "spawn", "id": "goblin_shaman"}
 }
 
 const DROW_BUILDINGS := {
@@ -179,6 +213,161 @@ const DROW_BUILDINGS := {
 	}
 }
 
+const GOBLIN_BUILDINGS := {
+	"goblin_hub": {
+		"name": "Empty Goblin Hub",
+		"role": "Empty landing room and village approach chamber.",
+		"footprint": [19, 11],
+		"floor_row": 9,
+		"entrances": {"left": [0, 8], "right": [18, 8]},
+		"required_tiles": ["goblin_timber_wall", "goblin_packed_floor", "goblin_hide_canopy"],
+		"required_props": ["goblin_torch"],
+		"layout": [
+			"___^^^^^^^^^^^^^___",
+			"__###.........###__",
+			"_###...........###_",
+			"###.............###",
+			"##...............##",
+			"##...............##",
+			"##...............##",
+			"###.............###",
+			"_###...........###_",
+			"===================",
+			"==================="
+		]
+	},
+	"goblin_village_chamber": {
+		"name": "Goblin Village Chamber",
+		"role": "Main hostile village room and connection anchor.",
+		"footprint": [29, 13],
+		"floor_row": 11,
+		"entrances": {"left": [0, 10], "right": [28, 10]},
+		"required_tiles": ["goblin_timber_wall", "goblin_packed_floor", "goblin_hide_canopy"],
+		"required_props": ["goblin_torch", "goblin_banner"],
+		"layout": [
+			"____^^^^^^^^^^^^^^^^^^^^^____",
+			"____#####...........#####____",
+			"__#####...............#####__",
+			"_#####.................#####_",
+			"####.....................####",
+			"###........g.....s........###",
+			"##.........................##",
+			"##.............T...........##",
+			"##.........................##",
+			"###.......................###",
+			"_#####.................#####_",
+			"=============================",
+			"============================="
+		]
+	},
+	"goblin_altar": {
+		"name": "Goblin Bone Altar",
+		"role": "Hostile ritual room and shaman spawn point.",
+		"footprint": [15, 10],
+		"floor_row": 8,
+		"entrances": {"left": [0, 7], "right": [14, 7]},
+		"required_tiles": ["goblin_timber_wall", "goblin_packed_floor", "goblin_hide_canopy"],
+		"required_props": ["goblin_bone_altar", "goblin_torch", "goblin_banner"],
+		"layout": [
+			"__^^^^^^^^^^^__",
+			"_####.....####_",
+			"####.......####",
+			"##.....A.....##",
+			"##...........##",
+			"##....m......##",
+			"###.........###",
+			"_###.......###_",
+			"===============",
+			"==============="
+		]
+	},
+	"goblin_barracks": {
+		"name": "Goblin Barracks",
+		"role": "Dense hostile room with several grunts.",
+		"footprint": [17, 10],
+		"floor_row": 8,
+		"entrances": {"left": [0, 7], "right": [16, 7]},
+		"required_tiles": ["goblin_timber_wall", "goblin_packed_floor", "goblin_hide_canopy"],
+		"required_props": ["goblin_crate", "goblin_door_flap"],
+		"layout": [
+			"__^^^^^^^^^^^^^__",
+			"_####.......####_",
+			"####.........####",
+			"##..g...g...g..##",
+			"##.............##",
+			"##..C.......C..##",
+			"###...........###",
+			"_###....D....###_",
+			"=================",
+			"================="
+		]
+	},
+	"goblin_storehouse": {
+		"name": "Goblin Storehouse",
+		"role": "Crate room with a slinger guard.",
+		"footprint": [15, 9],
+		"floor_row": 7,
+		"entrances": {"left": [0, 6], "right": [14, 6]},
+		"required_tiles": ["goblin_timber_wall", "goblin_packed_floor", "goblin_hide_canopy"],
+		"required_props": ["goblin_crate", "goblin_door_flap"],
+		"layout": [
+			"__^^^^^^^^^^^__",
+			"_####.....####_",
+			"####.......####",
+			"##..C.C.C....##",
+			"##...........##",
+			"##....s......##",
+			"_###...D...###_",
+			"===============",
+			"==============="
+		]
+	},
+	"goblin_watch_post": {
+		"name": "Goblin Watch Post",
+		"role": "Small vertical lookout tied back to the same village baseline.",
+		"footprint": [11, 13],
+		"floor_row": 11,
+		"entrances": {"left": [0, 10], "right": [10, 10]},
+		"required_tiles": ["goblin_timber_wall", "goblin_packed_floor"],
+		"required_props": ["goblin_palisade_post", "goblin_torch"],
+		"layout": [
+			"____P______",
+			"___PPP_____",
+			"__#####____",
+			"___#T#_____",
+			"___###_____",
+			"___#s#_____",
+			"___###_____",
+			"__#####____",
+			"_###...###_",
+			"###.....###",
+			"##.......##",
+			"===========",
+			"==========="
+		]
+	},
+	"goblin_cage": {
+		"name": "Goblin Cage Room",
+		"role": "Cage landmark with one goblin guard.",
+		"footprint": [13, 9],
+		"floor_row": 7,
+		"entrances": {"left": [0, 6], "right": [12, 6]},
+		"required_tiles": ["goblin_timber_wall", "goblin_packed_floor", "goblin_hide_canopy"],
+		"required_props": ["goblin_cage", "goblin_door_flap"],
+		"layout": [
+			"__^^^^^^^^^__",
+			"_###.....###_",
+			"###.......###",
+			"##...X.....##",
+			"##....g....##",
+			"##.........##",
+			"_###..D..###_",
+			"=============",
+			"============="
+		]
+	}
+}
+
 const DROW_VILLAGE := {
 	"id": "drow_village",
 	"name": "Drow Enclave Village",
@@ -215,16 +404,59 @@ const DROW_VILLAGE := {
 	]
 }
 
+const GOBLIN_VILLAGE := {
+	"id": "goblin_village",
+	"name": "Goblin Timber Village",
+	"band": "standard_caverns",
+	"tile_y_range": [48, 340],
+	"preferred_anchor": "wide Band 1 cave pocket or carved horizontal structure pocket",
+	"minimum_clearance_tiles": [68, 18],
+	"baseline_jitter_tiles": 2,
+	"required_tiles": GOBLIN_TILE_IDS,
+	"required_props": GOBLIN_PROP_IDS,
+	"symbol_legend": GOBLIN_SYMBOLS,
+	"required_buildings": ["goblin_hub", "goblin_village_chamber"],
+	"optional_buildings": ["goblin_altar", "goblin_barracks", "goblin_storehouse", "goblin_watch_post", "goblin_cage"],
+	"building_order": [
+		"goblin_hub",
+		"goblin_village_chamber",
+		"goblin_altar",
+		"goblin_barracks",
+		"goblin_storehouse",
+		"goblin_watch_post",
+		"goblin_cage"
+	],
+	"generation_rules": [
+		"Place the empty hub first as the approach room.",
+		"Place the larger village chamber next to the hub on the same baseline.",
+		"Attach two to four optional rooms to the chamber and keep entrances within two tiles of the chamber baseline.",
+		"Reject padded building rectangles that overlap.",
+		"Connect every room with a three-tile-high corridor and a solid packed-floor row.",
+		"Spawn goblins from marker symbols only when the player approaches the village."
+	]
+}
+
 static func get_village(village_id: String) -> Dictionary:
 	if village_id == "drow_village":
 		return DROW_VILLAGE
+	if village_id == "goblin_village":
+		return GOBLIN_VILLAGE
 	return {}
 
 static func get_building(building_id: String) -> Dictionary:
-	return DROW_BUILDINGS.get(building_id, {})
+	if DROW_BUILDINGS.has(building_id):
+		return DROW_BUILDINGS[building_id]
+	return GOBLIN_BUILDINGS.get(building_id, {})
 
-static func get_building_ids() -> Array:
-	return DROW_VILLAGE.building_order
+static func get_building_ids(village_id := "drow_village") -> Array:
+	var village := get_village(village_id)
+	return [] if village.is_empty() else village.building_order
 
 static func get_symbol(symbol: String) -> Dictionary:
 	return DROW_SYMBOLS.get(symbol, {})
+
+static func get_symbol_for_village(village_id: String, symbol: String) -> Dictionary:
+	var village := get_village(village_id)
+	if village.is_empty():
+		return {}
+	return Dictionary(village.symbol_legend).get(symbol, {})

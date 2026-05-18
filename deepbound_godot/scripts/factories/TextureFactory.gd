@@ -1,9 +1,42 @@
 extends RefCounted
 class_name TextureFactory
 
+const TileCatalog = preload("res://scripts/catalogs/TileCatalog.gd")
+const BackgroundCatalog = preload("res://scripts/catalogs/BackgroundCatalog.gd")
+const PlaceableCatalog = preload("res://scripts/catalogs/PlaceableCatalog.gd")
+
 const DELVER_FRAME_SIZE := Vector2i(32, 32)
 const DELVER_COLUMNS := 8
 const DELVER_ROWS := 7
+const CORE_ITEM_IDS := [
+	"dirt_clod",
+	"stone_chunk",
+	"copper_nugget",
+	"wooden_sword",
+	"chest",
+	"dirt_background_block",
+	"stone_background_block",
+	"wooden_background_block",
+	"resin_shard",
+	"royal_jelly",
+	"sandstone_shard",
+	"cursed_relic",
+	"glow_spore",
+	"drow_silk",
+	"obsidian_chip",
+]
+const CORE_UI_IDS := [
+	"heart_sheet",
+	"inventory_slot",
+	"quickbar_slot",
+	"quickbar_selected",
+	"drill_heat",
+	"health",
+	"light",
+	"danger_pulse",
+]
+const CORE_ENEMY_IDS := ["cave_skitter", "goblin_grunt", "goblin_slinger", "goblin_shaman", "worker_ant", "soldier_ant", "mummy_sentry"]
+const CORE_PROP_IDS := ["chest_open_sheet", "chest_closed", "chest_open", "flare", "outpost_beacon"]
 
 static var cache: Dictionary = {}
 
@@ -24,6 +57,9 @@ static func _put_pixel(image: Image, origin: Vector2i, x: int, y: int, color: Co
 static func _load_project_texture(path: String, cache_key: String) -> Texture2D:
 	if cache.has(cache_key):
 		return cache[cache_key]
+	if not FileAccess.file_exists(path):
+		cache[cache_key] = null
+		return null
 	if ResourceLoader.exists(path):
 		var texture: Texture2D = load(path)
 		if texture != null:
@@ -35,7 +71,33 @@ static func _load_project_texture(path: String, cache_key: String) -> Texture2D:
 		var texture := ImageTexture.create_from_image(image)
 		cache[cache_key] = texture
 		return texture
+	cache[cache_key] = null
 	return null
+
+static func warm_runtime_cache() -> void:
+	make_delver_sprite_sheet()
+	make_held_item_hand_texture()
+	make_weapon_ready_hand_texture()
+	make_weapon_ready_texture("wooden_sword")
+	make_weapon_hand_swing_texture()
+	make_weapon_swing_texture("wooden_sword")
+	for item_id in PlaceableCatalog.PLACEABLES.keys():
+		make_held_item_texture(String(item_id))
+	for tile_id in TileCatalog.TILES.keys():
+		make_tile_texture(String(tile_id), TileCatalog.get_tile(String(tile_id)))
+		if TileCatalog.is_breakable(String(tile_id)):
+			make_effect_texture("tile_breaking_%s_sheet" % String(tile_id))
+	for background_id in BackgroundCatalog.BACKGROUNDS.keys():
+		make_background_texture(String(background_id), BackgroundCatalog.get_background(String(background_id)))
+	make_effect_texture("tile_breaking_sheet")
+	for item_id in CORE_ITEM_IDS:
+		make_item_texture(item_id)
+	for ui_id in CORE_UI_IDS:
+		make_ui_texture(ui_id)
+	for enemy_id in CORE_ENEMY_IDS:
+		make_enemy_texture(enemy_id)
+	for prop_id in CORE_PROP_IDS:
+		make_prop_texture(prop_id)
 
 static func make_tile_texture(tile_id: String, tile_def: Dictionary) -> Texture2D:
 	var key := "tile:%s" % tile_id
@@ -81,6 +143,25 @@ static func make_tile_texture(tile_id: String, tile_def: Dictionary) -> Texture2
 			_put_rect(image, Rect2i(0, 13, 16, 2), Color8(36, 61, 57))
 		_:
 			_draw_earth_tile(image, tile_def, false)
+	var texture := ImageTexture.create_from_image(image)
+	cache[key] = texture
+	return texture
+
+static func make_background_texture(background_id: String, background_def: Dictionary) -> Texture2D:
+	var key := "background:%s" % background_id
+	if cache.has(key):
+		return cache[key]
+	var asset_texture := _load_project_texture("res://assets/backgrounds/%s.png" % background_id, key)
+	if asset_texture != null:
+		return asset_texture
+	var image := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	image.fill(Color(background_def.color, 0.82))
+	if not BackgroundCatalog.is_empty(background_id):
+		_put_rect(image, Rect2i(0, 0, 16, 1), Color(background_def.highlight, 0.28))
+		_put_rect(image, Rect2i(0, 15, 16, 1), Color(background_def.color, 0.55))
+		_put_rect(image, Rect2i(0, 0, 1, 16), Color(background_def.highlight, 0.18))
+		_put_pixel(image, Vector2i.ZERO, 4, 5, Color(background_def.highlight, 0.45))
+		_put_pixel(image, Vector2i.ZERO, 11, 10, Color(background_def.highlight, 0.35))
 	var texture := ImageTexture.create_from_image(image)
 	cache[key] = texture
 	return texture
@@ -132,7 +213,35 @@ static func make_enemy_texture(enemy_id: String) -> Texture2D:
 	return _load_project_texture("res://assets/enemies/%s.png" % enemy_id, "enemy:%s" % enemy_id)
 
 static func make_item_texture(item_id: String) -> Texture2D:
-	return _load_project_texture("res://assets/items/%s.png" % item_id, "item:%s" % item_id)
+	var texture := _load_project_texture("res://assets/items/%s.png" % item_id, "item:%s" % item_id)
+	if texture == null and item_id == "chest":
+		return make_prop_texture("chest_closed")
+	return texture
+
+static func make_weapon_hand_swing_texture() -> Texture2D:
+	return _load_project_texture("res://assets/sprites/weapon_hand_swing_sheet.png", "sprite:weapon_hand_swing_sheet")
+
+static func make_weapon_swing_texture(weapon_id := "wooden_sword") -> Texture2D:
+	return _load_project_texture("res://assets/sprites/%s_swing_sheet.png" % weapon_id, "sprite:%s_swing_sheet" % weapon_id)
+
+static func make_weapon_ready_hand_texture() -> Texture2D:
+	return _load_project_texture("res://assets/sprites/weapon_ready_hand_sheet.png", "sprite:weapon_ready_hand_sheet")
+
+static func make_weapon_ready_texture(weapon_id := "wooden_sword") -> Texture2D:
+	return _load_project_texture("res://assets/sprites/%s_ready_sheet.png" % weapon_id, "sprite:%s_ready_sheet" % weapon_id)
+
+static func make_held_item_hand_texture() -> Texture2D:
+	return _load_project_texture("res://assets/sprites/held_item_hand_sheet.png", "sprite:held_item_hand_sheet")
+
+static func make_held_item_texture(item_id: String) -> Texture2D:
+	var placeable := PlaceableCatalog.get_placeable(item_id)
+	if not placeable.is_empty() and String(placeable.get("kind", "")) == "tile":
+		var tile_id := String(placeable.get("tile", "air"))
+		return make_tile_texture(tile_id, TileCatalog.get_tile(tile_id))
+	if not placeable.is_empty() and String(placeable.get("kind", "")) == "background":
+		var background_id := String(placeable.get("background", BackgroundCatalog.EMPTY_ID))
+		return make_background_texture(background_id, BackgroundCatalog.get_background(background_id))
+	return make_item_texture(item_id)
 
 static func make_ui_texture(icon_id: String) -> Texture2D:
 	return _load_project_texture("res://assets/ui/%s.png" % icon_id, "ui:%s" % icon_id)
@@ -231,28 +340,9 @@ static func _draw_delver_frame(image: Image, origin: Vector2i, pose: String, fra
 		_put_cell_rect(image, origin, Rect2i(18, 22 + bob, 4, 7), drill)
 		_put_pixel(image, origin, 20, 28 + bob - (frame % 2), drill_hi)
 	elif pose == "weapon_swing":
-		var swing_cycle := frame % 8
-		var swing_points := [
-			[Vector2i(19, 13), Vector2i(23, 9), Vector2i(25, 7)],
-			[Vector2i(20, 13), Vector2i(25, 9), Vector2i(27, 8)],
-			[Vector2i(20, 14), Vector2i(27, 11), Vector2i(30, 10)],
-			[Vector2i(20, 15), Vector2i(29, 15), Vector2i(31, 15)],
-			[Vector2i(19, 17), Vector2i(26, 21), Vector2i(29, 23)],
-			[Vector2i(18, 18), Vector2i(23, 24), Vector2i(25, 27)],
-			[Vector2i(18, 17), Vector2i(22, 20), Vector2i(24, 22)],
-			[Vector2i(18, 15), Vector2i(22, 16), Vector2i(24, 17)]
-		]
-		var shoulder: Vector2i = swing_points[swing_cycle][0]
-		var blade_mid: Vector2i = swing_points[swing_cycle][1]
-		var blade_tip: Vector2i = swing_points[swing_cycle][2]
-		_put_cell_rect(image, origin, Rect2i(17, 14 + bob, 5, 5), outline)
-		_put_cell_rect(image, origin, Rect2i(18, 15 + bob, 3, 3), shirt_hi)
-		_draw_cell_line(image, origin, shoulder + Vector2i(0, bob), blade_mid + Vector2i(0, bob), drill)
-		_draw_cell_line(image, origin, blade_mid + Vector2i(0, bob), blade_tip + Vector2i(0, bob), steel)
-		_put_pixel(image, origin, blade_tip.x, blade_tip.y + bob, steel_shadow)
-		if swing_cycle in [2, 3, 4]:
-			for point in [Vector2i(23, 8), Vector2i(27, 10), Vector2i(30, 14), Vector2i(27, 20), Vector2i(23, 24)]:
-				_put_pixel(image, origin, point.x, point.y + bob, spark)
+		_put_cell_rect(image, origin, Rect2i(4, 14 + bob, 5, 10), outline)
+		_put_cell_rect(image, origin, Rect2i(5, 15 + bob, 3, 5), shirt)
+		_put_cell_rect(image, origin, Rect2i(5, 20 + bob, 3, 3), skin)
 	else:
 		_put_cell_rect(image, origin, Rect2i(4, 14 + bob + left_arm_y, 5, 10), outline)
 		_put_cell_rect(image, origin, Rect2i(16, 14 + bob + right_arm_y, 5, 10), outline)

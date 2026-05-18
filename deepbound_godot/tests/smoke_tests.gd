@@ -21,6 +21,7 @@ func _assert(condition: bool, message: String) -> void:
 func _run() -> void:
 	_test_bands()
 	_test_generation()
+	_test_sky_chunk_fast_path()
 	_test_mining_inventory()
 	_test_economy()
 	_test_sprint_4_5_hooks()
@@ -46,6 +47,14 @@ func _test_generation() -> void:
 	_assert(a == b, "generation should be deterministic for same seed/chunk")
 	_assert(a != c, "generation should vary by seed")
 	_assert(WorldGenerator.generate_tile_id(42, Vector2i(0, 1920)) == "solid_dark_block", "dark boundary should generate dark blocks")
+
+func _test_sky_chunk_fast_path() -> void:
+	var sky := WorldGenerator.generate_chunk(42, Vector2i(0, -4))
+	var sky_background := WorldGenerator.generate_background_chunk(42, Vector2i(0, -4))
+	_assert(sky.size() == ChunkStore.CHUNK_SIZE * ChunkStore.CHUNK_SIZE, "sky chunk should keep normal chunk dimensions")
+	_assert(sky_background.size() == ChunkStore.CHUNK_SIZE * ChunkStore.CHUNK_SIZE, "sky background chunk should keep normal chunk dimensions")
+	_assert(sky.all(func(tile_id): return String(tile_id) == "air"), "above-ground foreground chunks should fast-fill with air")
+	_assert(sky_background.all(func(background_id): return String(background_id) == "empty"), "above-ground background chunks should fast-fill empty")
 
 func _test_mining_inventory() -> void:
 	var store := ChunkStore.new(1)

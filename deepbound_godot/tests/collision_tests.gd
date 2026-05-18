@@ -1,6 +1,8 @@
 extends SceneTree
 
 const CollisionSystem = preload("res://scripts/systems/CollisionSystem.gd")
+const InventorySystem = preload("res://scripts/systems/InventorySystem.gd")
+const DroppedItemController = preload("res://scripts/controllers/DroppedItemController.gd")
 
 const PLAYER_COLLIDER := {"width": 14.0, "height": 28.0}
 const SKITTER_COLLIDER := {"width": 14.0, "height": 10.0}
@@ -43,6 +45,7 @@ func _run() -> void:
 	_test_player_slides_past_corner()
 	_test_removed_adjacent_tile_does_not_embed_player()
 	_test_enemy_uses_own_collider()
+	await _test_dropped_item_collides_with_floor()
 	if failures.is_empty():
 		print("Deepbound Godot collision tests passed.")
 		quit(0)
@@ -98,3 +101,22 @@ func _test_enemy_uses_own_collider() -> void:
 	_assert(not CollisionSystem.overlaps_tiles(result.position, SOLDIER_ANT_COLLIDER, world), "soldier ant should not overlap wall")
 	var skitter := CollisionSystem.move_actor(Vector2(34, 32), Vector2(500, 0), 0.1, SKITTER_COLLIDER, world)
 	_assert(skitter.position.x > result.position.x, "narrow skitter should fit closer to the same wall than soldier ant")
+
+func _test_dropped_item_collides_with_floor() -> void:
+	var world := TestWorld.new()
+	world.fill_rect(Vector2i(-3, 2), Vector2i(3, 2))
+	var inventory := InventorySystem.new()
+	var player := Node2D.new()
+	player.global_position = Vector2(200, 200)
+	var drop := DroppedItemController.new()
+	get_root().add_child(drop)
+	drop.global_position = Vector2(0, 8)
+	drop.pickup_delay = 1.0
+	drop.setup("stone_chunk", 1, player, inventory, Vector2(0, 620), world)
+	drop._process(0.12)
+	var floor_top := float(2 * TILE_SIZE)
+	var bottom := drop.global_position.y + float(DroppedItemController.ITEM_COLLIDER.bottom_offset.y)
+	_assert(bottom <= floor_top + 0.01, "dropped item should collide with floor instead of passing through blocks")
+	_assert(drop.velocity.y == 0.0, "dropped item downward velocity should stop on floor collision")
+	drop.free()
+	player.free()

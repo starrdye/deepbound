@@ -3,6 +3,9 @@ class_name EnemyCatalog
 
 const ENEMIES := {
 	"cave_skitter": {"name": "Cave Skitter", "band": "standard_caverns", "health": 24, "damage": 8, "speed": 34.0, "aggro_tiles": 8, "color": Color8(139, 70, 80)},
+	"goblin_grunt": {"name": "Goblin Grunt", "band": "standard_caverns", "health": 34, "damage": 10, "speed": 42.0, "aggro_tiles": 10, "color": Color8(91, 126, 48)},
+	"goblin_slinger": {"name": "Goblin Slinger", "band": "standard_caverns", "health": 26, "damage": 8, "speed": 46.0, "aggro_tiles": 12, "color": Color8(124, 142, 61)},
+	"goblin_shaman": {"name": "Goblin Shaman", "band": "standard_caverns", "health": 42, "damage": 13, "speed": 30.0, "aggro_tiles": 11, "color": Color8(97, 119, 52)},
 	"worker_ant": {"name": "Worker Ant", "band": "colossal_ant_chambers", "health": 34, "damage": 10, "speed": 42.0, "aggro_tiles": 9, "color": Color8(198, 134, 51)},
 	"soldier_ant": {"name": "Soldier Ant", "band": "colossal_ant_chambers", "health": 58, "damage": 16, "speed": 36.0, "aggro_tiles": 10, "color": Color8(143, 95, 34)},
 	"mummy_sentry": {"name": "Mummy Sentry", "band": "buried_pyramids", "health": 72, "damage": 18, "speed": 25.0, "aggro_tiles": 7, "color": Color8(210, 179, 106)}
@@ -10,6 +13,9 @@ const ENEMIES := {
 
 const COLLIDERS := {
 	"cave_skitter": {"width": 14.0, "height": 10.0},
+	"goblin_grunt": {"width": 14.0, "height": 25.0},
+	"goblin_slinger": {"width": 14.0, "height": 24.0},
+	"goblin_shaman": {"width": 15.0, "height": 27.0},
 	"worker_ant": {"width": 18.0, "height": 10.0},
 	"soldier_ant": {"width": 22.0, "height": 12.0},
 	"mummy_sentry": {"width": 14.0, "height": 28.0},

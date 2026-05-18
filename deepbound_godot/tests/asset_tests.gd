@@ -1,6 +1,7 @@
 extends SceneTree
 
 const TextureFactory = preload("res://scripts/factories/TextureFactory.gd")
+const BackgroundCatalog = preload("res://scripts/catalogs/BackgroundCatalog.gd")
 
 var failures: Array[String] = []
 
@@ -14,6 +15,9 @@ const TILE_IDS := [
 	"sandstone_block",
 	"pressure_plate",
 	"cursed_treasure",
+	"goblin_timber_wall",
+	"goblin_packed_floor",
+	"goblin_hide_canopy",
 	"glow_mushroom_loam",
 	"obsidian_ash",
 	"solid_dark_block"
@@ -21,6 +25,9 @@ const TILE_IDS := [
 
 const ENEMY_IDS := [
 	"cave_skitter",
+	"goblin_grunt",
+	"goblin_slinger",
+	"goblin_shaman",
 	"worker_ant",
 	"soldier_ant",
 	"mummy_sentry",
@@ -37,6 +44,10 @@ const ITEM_IDS := [
 	"dirt_clod",
 	"stone_chunk",
 	"copper_nugget",
+	"wooden_sword",
+	"dirt_background_block",
+	"stone_background_block",
+	"wooden_background_block",
 	"resin_shard",
 	"royal_jelly",
 	"sandstone_shard",
@@ -67,6 +78,12 @@ const UI_IDS := [
 	"tomb_key",
 	"light",
 	"danger_pulse"
+]
+
+const BACKGROUND_IDS := [
+	"dirt_background_block",
+	"stone_background_block",
+	"wooden_background_block"
 ]
 
 const UI_SHEETS := {
@@ -100,6 +117,9 @@ const BREAK_TILE_IDS := [
 	"sandstone_block",
 	"pressure_plate",
 	"cursed_treasure",
+	"goblin_timber_wall",
+	"goblin_packed_floor",
+	"goblin_hide_canopy",
 	"glow_mushroom_loam",
 	"obsidian_ash"
 ]
@@ -110,6 +130,13 @@ const PROP_IDS := [
 	"dart_trap",
 	"dart_projectile",
 	"pressure_plate_depressed",
+	"goblin_bone_altar",
+	"goblin_crate",
+	"goblin_cage",
+	"goblin_torch",
+	"goblin_banner",
+	"goblin_door_flap",
+	"goblin_palisade_post",
 	"chest_closed",
 	"chest_open",
 	"chest_open_sheet"
@@ -117,10 +144,14 @@ const PROP_IDS := [
 
 const SOURCE_AI_IDS := [
 	"villager_delver_ai_reference",
+	"delver_main_character_v2_ai_reference",
 	"enemy_roster_ai_reference",
 	"world_asset_ai_reference",
 	"drow_village_tiles_ai_reference",
-	"chest_heart_ai_reference"
+	"goblin_village_ai_reference",
+	"chest_heart_ai_reference",
+	"weapon_modular_ai_reference",
+	"held_item_pose_ai_reference"
 ]
 
 func _initialize() -> void:
@@ -135,6 +166,7 @@ func _run() -> void:
 	_test_source_art_boards()
 	_test_player_sheet()
 	_test_tiles()
+	_test_backgrounds()
 	_test_enemies()
 	_test_items()
 	_test_ui()
@@ -155,6 +187,23 @@ func _test_player_sheet() -> void:
 	var texture := TextureFactory.make_delver_sprite_sheet()
 	_assert(texture != null, "delver villager sheet should load")
 	_assert(texture.get_width() == 256 and texture.get_height() == 224, "delver villager sheet should be 8x7 32px frames including weapon swing")
+	var hand_sheet := TextureFactory.make_weapon_hand_swing_texture()
+	_assert(hand_sheet != null, "weapon hand swing sheet should load")
+	_assert(hand_sheet.get_width() == 256 and hand_sheet.get_height() == 32, "weapon hand swing sheet should be eight 32x32 frames")
+	var sword_sheet := TextureFactory.make_weapon_swing_texture("wooden_sword")
+	_assert(sword_sheet != null, "wooden sword swing sheet should load")
+	_assert(sword_sheet.get_width() == 256 and sword_sheet.get_height() == 32, "wooden sword swing sheet should be eight 32x32 frames")
+	var ready_hand_sheet := TextureFactory.make_weapon_ready_hand_texture()
+	_assert(ready_hand_sheet != null, "weapon ready hand sheet should load")
+	_assert(ready_hand_sheet.get_width() == 256 and ready_hand_sheet.get_height() == 96, "weapon ready hand sheet should be eight frames across three movement rows")
+	var ready_sword_sheet := TextureFactory.make_weapon_ready_texture("wooden_sword")
+	_assert(ready_sword_sheet != null, "wooden sword ready sheet should load")
+	_assert(ready_sword_sheet.get_width() == 256 and ready_sword_sheet.get_height() == 96, "wooden sword ready sheet should be eight frames across three movement rows")
+	var held_hand_sheet := TextureFactory.make_held_item_hand_texture()
+	_assert(held_hand_sheet != null, "held item hand sheet should load")
+	_assert(held_hand_sheet.get_width() == 256 and held_hand_sheet.get_height() == 96, "held item hand sheet should be eight frames across three movement rows")
+	var held_dirt := TextureFactory.make_held_item_texture("dirt_clod")
+	_assert(held_dirt != null and held_dirt.get_width() == 16 and held_dirt.get_height() == 16, "held dirt should resolve to a 16x16 placed block texture")
 
 func _test_tiles() -> void:
 	for tile_id in TILE_IDS:
@@ -163,6 +212,16 @@ func _test_tiles() -> void:
 		var texture := TextureFactory.make_tile_texture(tile_id, {"color": Color.WHITE, "highlight": Color.WHITE})
 		_assert(texture != null, "tile texture should load for %s" % tile_id)
 		_assert(texture.get_width() == 16 and texture.get_height() == 16, "tile %s should be 16x16" % tile_id)
+
+func _test_backgrounds() -> void:
+	for background_id in BACKGROUND_IDS:
+		var path := "res://assets/backgrounds/%s.png" % background_id
+		_assert(FileAccess.file_exists(path), "missing background block asset %s" % path)
+		var background_def := BackgroundCatalog.get_background(background_id)
+		_assert(not background_def.is_empty() and not BackgroundCatalog.is_empty(background_id), "background catalog should define %s" % background_id)
+		var texture := TextureFactory.make_background_texture(background_id, background_def)
+		_assert(texture != null, "background texture should load for %s" % background_id)
+		_assert(texture.get_width() == 16 and texture.get_height() == 16, "background %s should be 16x16" % background_id)
 
 func _test_enemies() -> void:
 	for enemy_id in ENEMY_IDS:

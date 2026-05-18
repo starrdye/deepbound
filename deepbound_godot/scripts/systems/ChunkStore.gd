@@ -7,8 +7,11 @@ const TileCatalog = preload("res://scripts/catalogs/TileCatalog.gd")
 const CHUNK_SIZE := 32
 var seed := 133742
 var chunks: Dictionary = {}
+var background_chunks: Dictionary = {}
 var overrides: Dictionary = {}
+var background_overrides: Dictionary = {}
 var damage: Dictionary = {}
+var background_damage: Dictionary = {}
 
 func _init(world_seed := 133742) -> void:
 	seed = world_seed
@@ -24,6 +27,11 @@ func get_chunk(chunk: Vector2i) -> Array[String]:
 		chunks[chunk] = WorldGenerator.generate_chunk(seed, chunk)
 	return chunks[chunk]
 
+func get_background_chunk(chunk: Vector2i) -> Array[String]:
+	if not background_chunks.has(chunk):
+		background_chunks[chunk] = WorldGenerator.generate_background_chunk(seed, chunk)
+	return background_chunks[chunk]
+
 func get_tile(tile: Vector2i) -> String:
 	if overrides.has(tile):
 		return String(overrides[tile])
@@ -31,9 +39,20 @@ func get_tile(tile: Vector2i) -> String:
 	var local := to_local_tile(tile)
 	return String(chunk[local.y * CHUNK_SIZE + local.x])
 
+func get_background_tile(tile: Vector2i) -> String:
+	if background_overrides.has(tile):
+		return String(background_overrides[tile])
+	var chunk := get_background_chunk(to_chunk_coord(tile))
+	var local := to_local_tile(tile)
+	return String(chunk[local.y * CHUNK_SIZE + local.x])
+
 func set_tile(tile: Vector2i, tile_id: String) -> void:
 	overrides[tile] = tile_id
 	damage.erase(tile)
+
+func set_background_tile(tile: Vector2i, background_id: String) -> void:
+	background_overrides[tile] = background_id
+	background_damage.erase(tile)
 
 func get_damage(tile: Vector2i) -> float:
 	return float(damage.get(tile, 0.0))
@@ -44,6 +63,14 @@ func set_damage(tile: Vector2i, value: float) -> void:
 func clear_damage(tile: Vector2i) -> void:
 	damage.erase(tile)
 
+func get_background_damage(tile: Vector2i) -> float:
+	return float(background_damage.get(tile, 0.0))
+
+func set_background_damage(tile: Vector2i, value: float) -> void:
+	background_damage[tile] = value
+
+func clear_background_damage(tile: Vector2i) -> void:
+	background_damage.erase(tile)
+
 func is_solid(tile: Vector2i) -> bool:
 	return TileCatalog.is_solid(get_tile(tile))
-

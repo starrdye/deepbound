@@ -9,7 +9,7 @@ The Delver starts in Band 1 near a test chest and a starter cave skitter encount
 1. Move through deterministic tile chunks.
 2. Drill adjacent blocks until they crack, break, and award drops.
 3. Collect resources into the personal inventory.
-4. Manage resources through the quickbar, chest inventory, and world drops.
+4. Manage resources through the extra hotbar, chest inventory, and world drops.
 5. Watch health, drill heat, local light, and danger while descending toward Bands 2 and 3 test hooks.
 
 ## Controls
@@ -17,10 +17,13 @@ The Delver starts in Band 1 near a test chest and a starter cave skitter encount
 - Move: `A/D` or left/right arrows
 - Jump: `W`, up arrow, or space
 - Drill: hold left mouse or `F`
+- Use/place selected hotbar item: right mouse
 - Strike: `E`
+- Inventory: `I`
+- Hotbar select: `1-6` or mouse wheel
 - Flare: `Q`
 - Beacon: `R`
-- Prototype band jumps: `1`, `2`, `3`
+- Prototype band jumps: `F1`, `F2`, `F3`
 
 Focus-loss protection clears transient input when the app window loses or regains focus, so returning to the game should not leave the Delver stuck walking in one direction.
 
@@ -48,27 +51,56 @@ The player inventory uses `InventorySystem.gd`.
 
 - Player slots: `24`
 - Default stack cap: `99`
-- Quickbar display: first `8` slots
+- Hotbar display: six extra slots that do not consume the `24` inventory slots
 - Chest test inventory: `18` slots
 
 Stack rules:
 
 - Dropping onto an empty slot moves the cursor stack there.
 - Dropping onto a matching stack merges up to the slot stack cap.
-- Overflow remains on the cursor.
-- Dropping onto a different item swaps the cursor stack with the slot stack.
+- Dragging is a preview until mouse release; source and target slots do not commit early.
+- Merge overflow returns to the original source slot after release.
+- Dropping onto a different item swaps the source and target stacks.
+
+## Hotbar
+
+The hotbar is always visible during normal gameplay and acts as six extra storage slots separate from the player's `24` slot inventory grid.
+
+- Hotbar size: `6` slots
+- Inventory impact: extra storage, not shared with inventory slots `0-23`
+- Selection: number keys `1-6`
+- Cycling: mouse wheel up/down
+- Drag/drop: items can be moved between the inventory panel, chest panel, and visible hotbar slots
+- Commit timing: hotbar and inventory data update only on mouse release, while the held item is drawn as a cursor preview
+- Visual feedback: copper corner brackets mark the active slot
+- Active item label: bottom-left HUD text names the selected stack
+- Placement: right-click places mapped hotbar items on clear reachable tiles after player-overlap and occupancy checks
+- Placement reach: `5.25` tiles
+- Placement preview: the target tile is highlighted while a placeable hotbar item is selected; valid targets are green and rejected targets are red
+
+Current placeable mappings:
+
+- `chest` -> `chest_block`
+- `dirt_clod` -> `loose_dirt`
+- `stone_chunk` -> `soft_stone`
+- `resin_shard` -> `hardened_resin`
+- `sandstone_shard` -> `sandstone_block`
+
+Opening the inventory with `I` shows the full inventory while the always-visible hotbar remains available as a drag/drop target. Moving an item into the hotbar changes what appears in the active item bar without removing any normal inventory slot.
 
 ## Chests And Containers
 
-A test chest spawns near the first spawn area. It contains starter copper and stone for fast UI testing.
+A block-backed test chest spawns near the first spawn area. It contains starter copper and stone for fast UI testing.
 
 - Chest open distance: `46px`
 - Chest inventory size: `18` slots
 - Default test contents: `6` copper nuggets and `12` stone chunks
-- The chest automatically opens when the Delver enters range.
+- The chest opens only when the Delver is in range and the player right-clicks directly on the chest.
 - The chest automatically closes when the Delver walks away.
+- Left-click mining damages and breaks the chest block.
+- Breaking a chest drops one empty `chest` item and spills each non-empty inventory stack as separate physical world drops. Contents are not preserved inside the chest item.
 
-When the chest is open, the HUD shows both inventories at once:
+Pressing `I` opens only the player inventory. Right-clicking a nearby chest opens the container view, and the HUD shows both inventories at once:
 
 - Player inventory panel on the left
 - Chest panel on the right
@@ -76,32 +108,39 @@ When the chest is open, the HUD shows both inventories at once:
 
 Closing a container flushes the held cursor stack back into the player inventory where possible. Any remaining cursor stack is emitted as a world drop instead of being destroyed.
 
-## Drag, Drop, And World Toss
+## Drag, Drop, And World Items
 
 When a stack is picked up from any open inventory panel, releasing it outside all open panels turns it into a physical world item.
 
 World-drop behavior:
 
 - Entity: `DroppedItemController.gd`
-- Safe toss distance: `72px`
-- Initial toss velocity: cursor/player-facing direction plus a small upward arc
+- Spawn point: the Delver's current bottom-center position
+- Chest spill point: the broken chest tile center
+- Initial velocity: `Vector2.ZERO` for player-dropped stacks
+- Physics: gravity, floor/wall collision, and solver substeps prevent dropped items from passing through solid blocks
 - Pickup delay: `0.55s`
-- Auto-pickup radius: `42px`
-- Collect radius: `12px`
+- Pickup method: click the visible item in the world
+- World drag: press and drag a visible dropped item to reposition it, then release to let physics resume
+- Special auto-pickup: only explicit boss, quest, or scripted reward drops opt in to automatic collection
 
-The safe toss distance intentionally places the item outside the automatic pickup radius, so dropping an item from the UI does not instantly re-collect it.
+Normal player-dropped stacks fall from the Delver's current position, settle on terrain, and stay there until the player clicks them.
 
-## Auto-Pickup
+## Pickup Rules
 
-Dropped items detect the player each frame after the pickup delay.
+Normal dropped items are collected by direct click after they land or while they are falling. The click must hit the item's small world pickup rectangle, and collection still respects inventory capacity. If the mouse moves more than a small drag threshold before release, the item is moved through the world instead of collected.
 
-An item starts flying toward the Delver only when:
+Collected items fill the hotbar before the main inventory: existing hotbar stacks are topped off first, then empty hotbar slots fill left to right, then the main inventory is used.
+
+While an inventory stack or world item is being dragged, the Delver ignores movement, jump, drill, weapon, flare, and beacon inputs. This keeps inventory handling from accidentally drilling blocks or swinging weapons.
+
+Boss, quest, or scripted reward drops can opt in to automatic pickup. An auto-pickup item starts flying toward the Delver only when:
 
 - It is within the auto-pickup radius.
 - The player inventory can accept at least part of the stack.
 - The item has completed its short pickup delay.
 
-If the player has a matching stack with room or an empty slot, the item is added automatically at collect distance. If only part of the stack fits, the remaining count stays in the world.
+If the player has a matching stack with room or an empty slot, the special item is added automatically at collect distance. If only part of the stack fits, the remaining count stays in the world.
 
 ## HUD
 
@@ -113,7 +152,7 @@ The Godot HUD is a crisp `Control` overlay, not a bitmap screenshot. It currentl
 - Target tile name
 - Local light percentage
 - Danger pulse overlay
-- Quickbar text summary
+- Always-visible hotbar with active slot selection
 - Inventory and chest panels when a container is open
 
 The HUD is edge-biased so it does not cover the Delver or the immediate mining target during normal play.
@@ -123,10 +162,10 @@ The HUD is edge-biased so it does not cover the Delver or the immediate mining t
 The current gameplay systems are covered by these Godot scripts:
 
 - `tests/smoke_tests.gd`: project boot, bands, mining, economy, lighting, Sprint 4/5 hooks
-- `tests/collision_tests.gd`: swept tile collision and anti-embedding rules
+- `tests/collision_tests.gd`: swept tile collision, dropped item collision, and anti-embedding rules
 - `tests/spawn_tests.gd`: enemy spawn clearance
-- `tests/input_tests.gd`: jump and focus-loss input behavior
+- `tests/input_tests.gd`: jump, focus-loss, inventory key, and hotbar key/scroll behavior
 - `tests/animation_tests.gd`: drill and weapon animation state
 - `tests/heart_tests.gd`: full, half, and empty heart logic
-- `tests/chest_tests.gd`: chest animation and auto-close behavior
-- `tests/inventory_tests.gd`: stack merge/swap, drag/drop, safe world toss, and auto-pickup
+- `tests/chest_tests.gd`: block-backed chest open/close, mining spill drops, hotbar placement, and placement rejection behavior
+- `tests/inventory_tests.gd`: stack merge/swap, extra hotbar storage, hotbar drag/drop, manual world-item dragging, click pickup, and special auto-pickup

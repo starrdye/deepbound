@@ -48,7 +48,7 @@ This Godot version follows the six-agent loop exactly: Writer -> Designer -> Cod
 
 **Writer:** The first outpost beacon is a rescued survey post: tiny proof that the Delver can make the deep habitable.
 
-**Designer:** Beacon placement creates a safe light island. Flares are immediate, temporary light. The quickbar shows resources without taking over the screen.
+**Designer:** Beacon placement creates a safe light island. Flares are immediate, temporary light. The hotbar shows resources without taking over the screen.
 
 **Coder:** `HudController.gd` uses Godot `Control` drawing and labels for crisp scalable UI. `World.gd` stores beacons and flares.
 
@@ -92,4 +92,3 @@ This Godot version follows the six-agent loop exactly: Writer -> Designer -> Cod
 - `godot4 --headless --path deepbound_godot --script tests/smoke_tests.gd` passes.
 - Player can move, drill, collect resources, strike enemies, place a beacon, use a flare, and jump to prototype Band 2/3 encounters with `2` and `3`.
 - Solid Dark Blocks resolve at `tileY >= 1920`.
-

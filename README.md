@@ -9,7 +9,7 @@ This repository now contains:
 - A Phaser + Vite + TypeScript browser vertical slice in `prototype/`.
 - A Godot 4.6 playable prototype in `deepbound_godot/`.
 - Deterministic chunk generation for the five-Band world model.
-- Band 1 movement, swept collision, mining, drops, grid inventory, chest containers, heart HUD, lighting, starter enemy pressure, and Godot `Control` UI.
+- Band 1 movement, swept collision, mining, physical drops, grid inventory, extra-slot hotbar, chest containers, heart HUD, lighting, starter enemy pressure, and Godot `Control` UI.
 - Vitest coverage for the Phaser reference build, plus Godot headless tests for bands, generation, mining, collision, animation, hearts, chests, inventory, and pickups.
 - Godot gameplay docs in `deepbound_godot/docs/Gameplay.md`.
 - Gold Master roadmap docs under `Docs/GoldMaster/`.
@@ -54,6 +54,9 @@ godot4 --headless --path deepbound_godot --script tests/inventory_tests.gd
 - Jump: `W`, up arrow, or space
 - Drill: hold mouse/touch or `F`
 - Strike starter hostile: `E`
+- Inventory: `I`
+- Hotbar: number keys `1-6` or mouse wheel
 - Flare: `Q`
 - Beacon: `R`
-- Chest/inventory: walk near the spawn chest, drag stacks between panels, or release a held stack outside the panels to toss it into the world
+- Use/place: right-click a nearby chest to open it, or right-click a clear reachable tile with a placeable hotbar item selected
+- Chest/container: chests are solid mineable blocks; breaking one spills its contents as physical click-pickup drops plus one empty chest item

@@ -147,7 +147,7 @@ Godot `Control` layout:
 
 - Health: top-left pips, `12x10` vector hearts or stone-lamp cells, spacing `4px`, color changes from `#C94E4E` to `#5A2531` when empty.
 - Drill heat: left edge vertical gauge, brass frame `#C58A32`, fill from `#FFD66B` to `#FF8A1F`.
-- Quickbar: bottom-center 5 slots, max height `42px`, selected slot has a 2-pixel copper bracket, not a glowing card.
+- Hotbar: bottom-center 6 extra slots, max height `42px`, selected slot has a 2-pixel copper bracket, not a glowing card.
 - Inventory panel: pauses mining focus, dark slate panel `#181724`, iron border `#5C6670`, material icons from the same pickup sheet.
 - Danger pulse: screen-edge vignette only. No center-screen red overlay.
 - Beacon/flare states: small right-edge indicators with warm light icons and cooldown rings.
@@ -177,7 +177,7 @@ Mandatory revisions:
 - Delver drill side frames need a brighter drill tip so the active tool reads against stone.
 - Resin cannot become a flat orange field. Add darker internal pockets and cooler shadow edges.
 - Worm telegraph must be visible before the head appears. Dust alone is too subtle.
-- Quickbar selected state should use brackets, not a full glowing rectangle, to avoid covering bottom combat space.
+- Hotbar selected state should use brackets, not a full glowing rectangle, to avoid covering bottom combat space.
 
 ### Veteran Player
 
@@ -188,7 +188,7 @@ Controls will feel tighter with the narrower collider, but the art must sell tha
 - Add a 1-pixel boot shadow and centered sole highlight to the Delver walk frames.
 - Keep cave skitter height at `12px`; worker ant remains longer with visible antennae.
 - Add orange pre-lunge crescent for tunneling worm.
-- Add quickbar copper corner brackets instead of full-slot glow.
+- Add hotbar copper corner brackets instead of full-slot glow.
 
 ## Cycle 2 - Collision Readability and Biome Refinement
 

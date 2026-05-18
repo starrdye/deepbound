@@ -26,11 +26,11 @@ godot4 --headless --path deepbound_godot --script tests/inventory_tests.gd
 
 ## Prototype Scope
 
-This build covers playable Sprints 1-5: Band 1 foundation, Band 1 polish/UI, first outpost beacon, Band 2 ant chamber hooks, Band 3 pyramid hooks, swept collision, modular sprite animation, chest interaction, grid inventory, world drops, auto-pickup, and the heart HUD.
+This build covers playable Sprints 1-5: Band 1 foundation, Band 1 polish/UI, first outpost beacon, Band 2 ant chamber hooks, Band 3 pyramid hooks, swept collision, modular sprite animation, block-backed chest containers, grid inventory, extra-slot hotbar placement, physical world drops, click pickup, special auto-pickup, and the heart HUD.
 
 ## Gameplay Docs
 
-The current player/system guide is in `docs/Gameplay.md`. It covers controls, mining, chests, dual inventory panels, drag/drop stack rules, safe world tosses, auto-pickup, heart HP rules, and the HUD.
+The current player/system guide is in `docs/Gameplay.md`. It covers controls, `I` inventory, hotbar selection with `1-6` and mouse wheel, right-click chest use and placement, dual inventory panels, drag/drop stack rules, physical world drops, click pickup, special auto-pickup, heart HP rules, and the HUD.
 
 ## Art Production
 

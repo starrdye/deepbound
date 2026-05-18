@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parents[1]
 SPRITE_DIR = ROOT / "assets" / "sprites"
 TILE_DIR = ROOT / "assets" / "tiles"
+BACKGROUND_DIR = ROOT / "assets" / "backgrounds"
 UI_DIR = ROOT / "assets" / "ui"
 ENEMY_DIR = ROOT / "assets" / "enemies"
 ITEM_DIR = ROOT / "assets" / "items"
@@ -15,15 +16,20 @@ PROP_DIR = ROOT / "assets" / "props"
 EFFECT_DIR = ROOT / "assets" / "effects"
 PREVIEW_DIR = ROOT / "assets" / "previews"
 AI_REFERENCE = ROOT / "assets" / "source_ai" / "villager_delver_ai_reference.png"
+AI_PLAYER_REFERENCE_V2 = ROOT / "assets" / "source_ai" / "delver_main_character_v2_ai_reference.png"
 AI_ENEMY_REFERENCE = ROOT / "assets" / "source_ai" / "enemy_roster_ai_reference.png"
 AI_WORLD_REFERENCE = ROOT / "assets" / "source_ai" / "world_asset_ai_reference.png"
 AI_DROW_TILE_REFERENCE = ROOT / "assets" / "source_ai" / "drow_village_tiles_ai_reference.png"
+AI_GOBLIN_VILLAGE_REFERENCE = ROOT / "assets" / "source_ai" / "goblin_village_ai_reference.png"
 AI_HEART_CHEST_REFERENCE = ROOT / "assets" / "source_ai" / "chest_heart_ai_reference.png"
+AI_WEAPON_REFERENCE = ROOT / "assets" / "source_ai" / "weapon_modular_ai_reference.png"
+AI_HELD_ITEM_REFERENCE = ROOT / "assets" / "source_ai" / "held_item_pose_ai_reference.png"
 
 FRAME_W = 32
 FRAME_H = 32
 COLS = 8
 ROWS = 7
+READY_ROWS = 3
 ENEMY_COLS = 8
 ENEMY_ROWS = 4
 BREAK_STAGE_COUNT = 5
@@ -38,6 +44,9 @@ BREAK_MATERIALS = {
     "sandstone_block": {"shadow": (88, 66, 40, 220), "mid": (155, 129, 80, 225), "hi": (231, 196, 122, 235), "chip": (255, 230, 152, 240)},
     "pressure_plate": {"shadow": (36, 61, 57, 220), "mid": (62, 143, 116, 225), "hi": (112, 206, 177, 235), "chip": (168, 236, 205, 240)},
     "cursed_treasure": {"shadow": (55, 39, 28, 220), "mid": (170, 111, 45, 225), "hi": (255, 214, 107, 240), "chip": (112, 206, 177, 245)},
+    "goblin_timber_wall": {"shadow": (48, 32, 26, 220), "mid": (118, 74, 38, 225), "hi": (206, 132, 64, 235), "chip": (246, 190, 116, 240)},
+    "goblin_packed_floor": {"shadow": (58, 43, 32, 220), "mid": (130, 92, 55, 225), "hi": (196, 148, 86, 235), "chip": (232, 182, 112, 240)},
+    "goblin_hide_canopy": {"shadow": (42, 48, 32, 220), "mid": (98, 101, 53, 225), "hi": (157, 151, 75, 235), "chip": (210, 190, 105, 240)},
     "glow_mushroom_loam": {"shadow": (24, 30, 72, 220), "mid": (45, 63, 130, 225), "hi": (85, 214, 210, 235), "chip": (182, 255, 236, 245)},
     "drow_basalt_brick": {"shadow": (18, 20, 45, 225), "mid": (72, 65, 138, 225), "hi": (133, 112, 184, 235), "chip": (85, 214, 210, 240)},
     "drow_carved_floor": {"shadow": (23, 28, 61, 225), "mid": (66, 82, 138, 225), "hi": (112, 206, 177, 235), "chip": (182, 255, 236, 240)},
@@ -69,6 +78,22 @@ DROW_VILLAGE_PROP_IDS = [
     "drow_web_bridge",
 ]
 
+GOBLIN_VILLAGE_TILE_IDS = [
+    "goblin_timber_wall",
+    "goblin_packed_floor",
+    "goblin_hide_canopy",
+]
+
+GOBLIN_VILLAGE_PROP_IDS = [
+    "goblin_bone_altar",
+    "goblin_crate",
+    "goblin_cage",
+    "goblin_torch",
+    "goblin_banner",
+    "goblin_door_flap",
+    "goblin_palisade_post",
+]
+
 PALETTE = {
     "transparent": (0, 0, 0, 0),
     "outline": (24, 23, 36, 255),
@@ -95,7 +120,7 @@ PALETTE = {
 
 
 def ensure_dirs() -> None:
-    for path in (SPRITE_DIR, TILE_DIR, UI_DIR, ENEMY_DIR, ITEM_DIR, PROP_DIR, EFFECT_DIR, PREVIEW_DIR):
+    for path in (SPRITE_DIR, TILE_DIR, BACKGROUND_DIR, UI_DIR, ENEMY_DIR, ITEM_DIR, PROP_DIR, EFFECT_DIR, PREVIEW_DIR):
         path.mkdir(parents=True, exist_ok=True)
 
 
@@ -199,6 +224,16 @@ def draw_idle_arms(img: Image.Image, ox: int, oy: int, bob: int, left_y: int, ri
     rect(d, ox + 21, oy + 20 + bob + right_y, 3, 3, skin)
 
 
+def draw_weapon_body_back_arm(img: Image.Image, ox: int, oy: int, bob: int) -> None:
+    d = ImageDraw.Draw(img)
+    o = PALETTE["outline"]
+    tunic = PALETTE["tunic"]
+    skin = PALETTE["skin"]
+    rect(d, ox + 8, oy + 14 + bob, 5, 10, o)
+    rect(d, ox + 9, oy + 15 + bob, 3, 5, tunic)
+    rect(d, ox + 9, oy + 20 + bob, 3, 3, skin)
+
+
 def draw_drill_side(img: Image.Image, ox: int, oy: int, bob: int, frame: int) -> None:
     d = ImageDraw.Draw(img)
     rect(d, ox + 17, oy + 14 + bob, 8, 5, PALETTE["outline"])
@@ -267,6 +302,161 @@ def draw_weapon_swing(img: Image.Image, ox: int, oy: int, bob: int, frame: int) 
             px(img, ox + point[0], oy + point[1] + bob, spark if index == 0 else (255, 214, 107, 180))
 
 
+def weapon_swing_points(frame: int) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
+    return [
+        ((18, 15), (22, 10), (29, 3)),
+        ((19, 14), (24, 9), (31, 5)),
+        ((20, 14), (26, 11), (31, 9)),
+        ((21, 15), (27, 15), (31, 15)),
+        ((20, 17), (25, 20), (30, 25)),
+        ((18, 18), (22, 24), (25, 30)),
+        ((17, 17), (20, 21), (24, 25)),
+        ((17, 16), (21, 17), (27, 19)),
+    ][frame % 8]
+
+
+def draw_weapon_hand_overlay(img: Image.Image, ox: int, oy: int, frame: int) -> None:
+    d = ImageDraw.Draw(img)
+    grip, _blade_mid, _blade_tip = weapon_swing_points(frame)
+    cycle = frame % 8
+    shoulder = [
+        (12, 23),
+        (13, 22),
+        (15, 20),
+        (15, 18),
+        (14, 15),
+        (13, 14),
+        (12, 14),
+        (12, 16),
+    ][cycle]
+    gx = ox + grip[0]
+    gy = oy + grip[1]
+    sx = ox + shoulder[0]
+    sy = oy + shoulder[1]
+    cuff = (64, 49, 42, 255)
+    cuff_hi = (103, 76, 56, 255)
+    skin = PALETTE["skin"]
+    skin_hi = PALETTE["skin_hi"]
+    outline = PALETTE["outline"]
+    d.line((sx, sy, gx, gy), fill=outline, width=5)
+    d.line((sx, sy, gx, gy), fill=PALETTE["tunic_hi"], width=3)
+    d.line((sx, sy + 1, gx, gy + 1), fill=skin, width=2)
+    d.ellipse((gx - 4, gy - 4, gx + 4, gy + 4), fill=outline)
+    d.ellipse((gx - 3, gy - 3, gx + 3, gy + 3), fill=cuff)
+    d.ellipse((gx - 2, gy - 2, gx + 2, gy + 2), fill=skin)
+    px(img, gx + 1, gy - 2, skin_hi)
+    px(img, gx - 2, gy + 1, cuff_hi)
+
+
+def draw_wooden_sword_overlay(img: Image.Image, ox: int, oy: int, frame: int) -> None:
+    d = ImageDraw.Draw(img)
+    grip, blade_mid, blade_tip = weapon_swing_points(frame)
+    gx, gy = ox + grip[0], oy + grip[1]
+    mx, my = ox + blade_mid[0], oy + blade_mid[1]
+    tx, ty = ox + blade_tip[0], oy + blade_tip[1]
+    outline = PALETTE["outline_warm"]
+    wood = (149, 82, 40, 255)
+    wood_hi = (228, 143, 67, 255)
+    wood_shadow = (82, 49, 34, 255)
+    brass = (214, 148, 57, 255)
+    d.line((gx, gy, mx, my), fill=outline, width=4)
+    d.line((gx, gy, mx, my), fill=wood_shadow, width=2)
+    d.line((mx, my, tx, ty), fill=outline, width=5)
+    d.line((mx, my, tx, ty), fill=wood, width=3)
+    d.line((mx, my, tx, ty), fill=wood_hi, width=1)
+    d.ellipse((mx - 3, my - 3, mx + 3, my + 3), fill=outline)
+    d.ellipse((mx - 2, my - 2, mx + 2, my + 2), fill=brass)
+    px(img, tx, ty, wood_hi)
+
+
+def ready_pose_bob(row: int, frame: int) -> int:
+    cycle = frame % 8
+    if row == 1:
+        return [1, 0, -1, -1, 0, 1, 1, 0][cycle]
+    if row == 2:
+        return [-1, -2, -2, -1, 0, 1, 1, 0][cycle]
+    return [0, 0, 1, 1, 0, -1, 0, 0][cycle]
+
+
+def held_item_anchor_point(row: int, frame: int) -> tuple[int, int]:
+    cycle = frame % 8
+    y = 23 + ready_pose_bob(row, frame)
+    if row == 1:
+        y += [1, 0, -1, -1, 0, 1, 1, 0][cycle] // 2
+    return (25, y)
+
+
+def weapon_ready_points(row: int, frame: int) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
+    cycle = frame % 8
+    bob = ready_pose_bob(row, frame)
+    grip = (21, 18 + bob)
+    mid = (25, 13 + bob + (1 if cycle in (2, 3, 4) else 0))
+    tip = (30, 7 + bob + (1 if row == 2 else 0))
+    return grip, mid, tip
+
+
+def draw_held_item_hand_overlay(img: Image.Image, ox: int, oy: int, frame: int, row: int = 0) -> None:
+    d = ImageDraw.Draw(img)
+    hand_x, hand_y = held_item_anchor_point(row, frame)
+    wrist = (ox + hand_x, oy + hand_y)
+    elbow = (ox + 15, oy + hand_y + 3)
+    outline = PALETTE["outline"]
+    sleeve = (64, 49, 42, 255)
+    sleeve_hi = (103, 76, 56, 255)
+    skin = PALETTE["skin"]
+    skin_hi = PALETTE["skin_hi"]
+    d.line((elbow[0], elbow[1], wrist[0], wrist[1]), fill=outline, width=5)
+    d.line((elbow[0], elbow[1], wrist[0], wrist[1]), fill=sleeve, width=3)
+    d.line((elbow[0] + 1, elbow[1] - 1, wrist[0] + 1, wrist[1] - 1), fill=sleeve_hi, width=1)
+    d.ellipse((wrist[0] - 2, wrist[1] - 3, wrist[0] + 5, wrist[1] + 4), fill=outline)
+    d.ellipse((wrist[0] - 1, wrist[1] - 2, wrist[0] + 4, wrist[1] + 3), fill=skin)
+    px(img, wrist[0] + 2, wrist[1] - 2, skin_hi)
+    px(img, wrist[0] + 4, wrist[1], PALETTE["skin_shadow"])
+
+
+def draw_weapon_ready_hand_overlay(img: Image.Image, ox: int, oy: int, frame: int, row: int = 0) -> None:
+    d = ImageDraw.Draw(img)
+    grip, _mid, _tip = weapon_ready_points(row, frame)
+    bob = ready_pose_bob(row, frame)
+    shoulder = (15, 21 + bob)
+    gx, gy = ox + grip[0], oy + grip[1]
+    sx, sy = ox + shoulder[0], oy + shoulder[1]
+    outline = PALETTE["outline"]
+    sleeve = PALETTE["tunic_hi"]
+    skin = PALETTE["skin"]
+    skin_hi = PALETTE["skin_hi"]
+    d.line((sx, sy, gx, gy), fill=outline, width=5)
+    d.line((sx, sy, gx, gy), fill=sleeve, width=3)
+    d.line((sx + 1, sy, gx + 1, gy), fill=skin, width=2)
+    d.ellipse((gx - 3, gy - 3, gx + 4, gy + 4), fill=outline)
+    d.ellipse((gx - 2, gy - 2, gx + 3, gy + 3), fill=skin)
+    px(img, gx + 1, gy - 2, skin_hi)
+    px(img, gx + 3, gy + 1, PALETTE["skin_shadow"])
+
+
+def draw_wooden_sword_ready_overlay(img: Image.Image, ox: int, oy: int, frame: int, row: int = 0) -> None:
+    d = ImageDraw.Draw(img)
+    grip, mid, tip = weapon_ready_points(row, frame)
+    gx, gy = ox + grip[0], oy + grip[1]
+    mx, my = ox + mid[0], oy + mid[1]
+    tx, ty = ox + tip[0], oy + tip[1]
+    outline = PALETTE["outline_warm"]
+    wood = (149, 82, 40, 255)
+    wood_hi = (228, 143, 67, 255)
+    grip_color = (55, 43, 38, 255)
+    brass = (214, 148, 57, 255)
+    d.line((gx - 2, gy + 2, gx + 1, gy - 1), fill=outline, width=3)
+    d.line((gx - 2, gy + 2, gx + 1, gy - 1), fill=grip_color, width=1)
+    d.line((gx - 2, gy - 1, gx + 3, gy + 2), fill=outline, width=3)
+    d.line((gx - 2, gy - 1, gx + 3, gy + 2), fill=brass, width=1)
+    d.line((gx, gy, mx, my), fill=outline, width=4)
+    d.line((gx, gy, mx, my), fill=wood, width=2)
+    d.line((mx, my, tx, ty), fill=outline, width=5)
+    d.line((mx, my, tx, ty), fill=wood, width=3)
+    d.line((mx + 1, my, tx + 1, ty), fill=wood_hi, width=1)
+    px(img, tx, ty, wood_hi)
+
+
 def draw_delver_frame(img: Image.Image, col: int, row: int, pose: str, frame: int) -> None:
     ox = col * FRAME_W
     oy = row * FRAME_H
@@ -318,7 +508,7 @@ def draw_delver_frame(img: Image.Image, col: int, row: int, pose: str, frame: in
     elif pose == "drill_down":
         draw_drill_down(img, ox, oy, bob, frame)
     elif pose == "weapon_swing":
-        draw_weapon_swing(img, ox, oy, bob, frame)
+        draw_weapon_body_back_arm(img, ox, oy, bob)
     else:
         draw_idle_arms(img, ox, oy, bob, left_arm_y, right_arm_y)
     draw_torso(img, ox, oy, bob)
@@ -356,13 +546,45 @@ def make_delver_sheet_from_ai(reference: Path) -> Image.Image:
     for index, frame in enumerate(frames):
         sheet.alpha_composite(frame, ((index % COLS) * FRAME_W, (index // COLS) * FRAME_H))
     for frame in range(COLS):
-        weapon_frame = frames[frame % COLS].copy()
-        draw_weapon_swing(weapon_frame, 0, 0, 0, frame)
-        sheet.alpha_composite(weapon_frame, (frame * FRAME_W, 6 * FRAME_H))
+        sheet.alpha_composite(frames[frame % COLS], (frame * FRAME_W, 6 * FRAME_H))
     return sheet
 
 
-def _remove_border_black(image: Image.Image) -> None:
+def make_delver_sheet_from_v2_ai(reference: Path) -> Image.Image:
+    src = Image.open(reference).convert("RGBA")
+    centers_x = [91, 240, 389, 538, 687, 836, 985, 1134]
+    centers_y = [78, 211, 349, 488, 626, 765, 904]
+    crop_sizes = [
+        (128, 128),
+        (132, 128),
+        (136, 128),
+        (136, 124),
+        (132, 148),
+        (144, 148),
+        (152, 132),
+    ]
+    sheet = Image.new("RGBA", (FRAME_W * COLS, FRAME_H * ROWS), PALETTE["transparent"])
+    for row, cy in enumerate(centers_y):
+        crop_w, crop_h = crop_sizes[row]
+        for col, cx in enumerate(centers_x):
+            crop = src.crop((cx - crop_w // 2, cy - crop_h // 2, cx + crop_w // 2, cy + crop_h // 2))
+            cell = crop.resize((FRAME_W, FRAME_H), Image.Resampling.BOX).convert("RGBA")
+            _remove_border_black(cell, 34)
+            cell = _quantize_rgba(cell, 34)
+            sheet.alpha_composite(cell, (col * FRAME_W, row * FRAME_H))
+    return sheet
+
+
+def make_clean_delver_sheet() -> Image.Image:
+    sheet = Image.new("RGBA", (FRAME_W * COLS, FRAME_H * ROWS), PALETTE["transparent"])
+    poses = ["idle", "walk", "jump", "drill_side", "drill_up", "drill_down", "weapon_swing"]
+    for row, pose in enumerate(poses):
+        for col in range(COLS):
+            draw_delver_frame(sheet, col, row, pose, col)
+    return sheet
+
+
+def _remove_border_black(image: Image.Image, threshold: int = 24) -> None:
     pixels = image.load()
     seen: set[tuple[int, int]] = set()
     queue: list[tuple[int, int]] = []
@@ -377,7 +599,7 @@ def _remove_border_black(image: Image.Image) -> None:
         if (x, y) in seen or x < 0 or y < 0 or x >= image.width or y >= image.height:
             continue
         r, g, b, _a = pixels[x, y]
-        if max(r, g, b) > 24:
+        if max(r, g, b) > threshold:
             continue
         seen.add((x, y))
         pixels[x, y] = (0, 0, 0, 0)
@@ -558,14 +780,12 @@ def make_chest_assets_from_ai() -> None:
 
 
 def make_delver_sheet() -> None:
-    if AI_REFERENCE.exists():
+    if AI_PLAYER_REFERENCE_V2.exists():
+        sheet = make_delver_sheet_from_v2_ai(AI_PLAYER_REFERENCE_V2)
+    elif AI_REFERENCE.exists():
         sheet = make_delver_sheet_from_ai(AI_REFERENCE)
     else:
-        sheet = Image.new("RGBA", (FRAME_W * COLS, FRAME_H * ROWS), PALETTE["transparent"])
-        poses = ["idle", "walk", "jump", "drill_side", "drill_up", "drill_down", "weapon_swing"]
-        for row, pose in enumerate(poses):
-            for col in range(COLS):
-                draw_delver_frame(sheet, col, row, pose, col)
+        sheet = make_clean_delver_sheet()
     sheet.save(SPRITE_DIR / "delver_villager_sheet.png")
     make_preview(sheet, PREVIEW_DIR / "delver_villager_sheet_preview.png", scale=6, grid=(FRAME_W, FRAME_H))
 
@@ -768,6 +988,97 @@ def make_drow_village_assets() -> None:
     make_preview(atlas, PREVIEW_DIR / "drow_village_kit_preview.png", scale=8, grid=(16, 16))
 
 
+def make_goblin_tile(tile_id: str) -> Image.Image:
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    if tile_id == "goblin_timber_wall":
+        img.paste((82, 52, 33, 255), (0, 0, 16, 16))
+        rect(d, 0, 12, 16, 4, (45, 31, 26, 255))
+        for x in (3, 8, 13):
+            d.line((x, 1, x, 15), fill=(132, 82, 43, 255), width=1)
+        d.line((1, 5, 15, 4), fill=(176, 116, 58, 255), width=1)
+        d.line((1, 10, 15, 11), fill=(55, 35, 28, 255), width=1)
+        px(img, 5, 3, (224, 153, 82, 255))
+        px(img, 11, 8, (224, 153, 82, 255))
+    elif tile_id == "goblin_packed_floor":
+        img.paste((104, 75, 48, 255), (0, 0, 16, 16))
+        rect(d, 0, 12, 16, 4, (58, 43, 32, 255))
+        for point in [(3, 4), (8, 2), (12, 7), (5, 10), (10, 12)]:
+            px(img, point[0], point[1], (163, 125, 77, 255))
+        d.line((2, 8, 7, 9, 13, 7), fill=(76, 55, 39, 255), width=1)
+    elif tile_id == "goblin_hide_canopy":
+        img.paste((84, 85, 48, 255), (0, 0, 16, 16))
+        rect(d, 0, 11, 16, 5, (42, 48, 32, 255))
+        d.line((1, 2, 14, 5), fill=(145, 139, 72, 255), width=1)
+        d.line((2, 5, 13, 13), fill=(54, 60, 37, 255), width=1)
+        d.line((13, 2, 2, 13), fill=(54, 60, 37, 255), width=1)
+        px(img, 6, 4, (190, 174, 94, 255))
+        px(img, 11, 9, (190, 174, 94, 255))
+    img.save(TILE_DIR / f"{tile_id}.png")
+    return img
+
+
+def make_goblin_prop(prop_id: str) -> Image.Image:
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    outline = (32, 22, 22, 255)
+    wood = (111, 68, 37, 255)
+    wood_hi = (184, 117, 55, 255)
+    bone = (213, 190, 137, 255)
+    hide = (107, 63, 44, 255)
+    if prop_id == "goblin_bone_altar":
+        rect(d, 2, 11, 12, 4, outline)
+        rect(d, 3, 10, 10, 4, (79, 60, 43, 255))
+        d.line((4, 10, 8, 4, 12, 10), fill=bone, width=2)
+        px(img, 8, 5, (255, 226, 163, 255))
+    elif prop_id == "goblin_crate":
+        rect(d, 3, 7, 10, 7, outline)
+        rect(d, 4, 8, 8, 5, wood)
+        d.line((4, 8, 12, 13), fill=(55, 36, 28, 255), width=1)
+        d.line((12, 8, 4, 13), fill=wood_hi, width=1)
+    elif prop_id == "goblin_cage":
+        rect(d, 3, 4, 10, 11, outline)
+        rect(d, 4, 5, 8, 9, (46, 39, 36, 255))
+        for x in (5, 8, 11):
+            d.line((x, 5, x, 14), fill=(126, 93, 61, 255), width=1)
+        d.line((4, 9, 12, 9), fill=(126, 93, 61, 255), width=1)
+    elif prop_id == "goblin_torch":
+        rect(d, 7, 7, 3, 8, outline)
+        rect(d, 8, 8, 1, 7, wood)
+        d.polygon([(8, 1), (12, 6), (8, 9), (4, 6)], fill=(147, 50, 27, 255))
+        d.polygon([(8, 2), (10, 6), (8, 8), (6, 6)], fill=(255, 151, 43, 255))
+        px(img, 8, 4, (255, 224, 121, 255))
+    elif prop_id == "goblin_banner":
+        rect(d, 3, 1, 2, 14, outline)
+        rect(d, 5, 2, 8, 10, hide)
+        d.polygon([(5, 12), (9, 15), (13, 12)], fill=(72, 42, 33, 255))
+        d.line((6, 5, 12, 9), fill=bone, width=1)
+    elif prop_id == "goblin_door_flap":
+        rect(d, 3, 2, 10, 13, outline)
+        rect(d, 4, 3, 8, 11, hide)
+        d.line((4, 3, 12, 13), fill=(154, 94, 60, 255), width=1)
+        d.line((12, 3, 4, 13), fill=(68, 43, 35, 255), width=1)
+    elif prop_id == "goblin_palisade_post":
+        d.polygon([(8, 1), (12, 6), (10, 15), (6, 15), (4, 6)], fill=outline)
+        d.polygon([(8, 2), (11, 6), (9, 14), (7, 14), (5, 6)], fill=wood)
+        d.line((8, 3, 8, 14), fill=wood_hi, width=1)
+    img.save(PROP_DIR / f"{prop_id}.png")
+    return img
+
+
+def make_goblin_village_assets() -> None:
+    # The source board sets the style, but these tiny kit pieces need crisp manual cleanup at 16x16.
+    tiles = [make_goblin_tile(tile_id) for tile_id in GOBLIN_VILLAGE_TILE_IDS]
+    props = [make_goblin_prop(prop_id) for prop_id in GOBLIN_VILLAGE_PROP_IDS]
+    atlas = Image.new("RGBA", (16 * 6, 16 * 2), (0, 0, 0, 0))
+    for index, tile in enumerate(tiles):
+        atlas.alpha_composite(tile, ((index % 6) * 16, (index // 6) * 16))
+    for index, prop in enumerate(props):
+        atlas.alpha_composite(prop, (((index + len(tiles)) % 6) * 16, ((index + len(tiles)) // 6) * 16))
+    atlas.save(PREVIEW_DIR / "goblin_village_kit.png")
+    make_preview(atlas, PREVIEW_DIR / "goblin_village_kit_preview.png", scale=8, grid=(16, 16))
+
+
 def make_item_icon(name: str, color: tuple[int, int, int], highlight: tuple[int, int, int], shape: str = "chunk") -> Image.Image:
     img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -798,6 +1109,14 @@ def make_item_icon(name: str, color: tuple[int, int, int], highlight: tuple[int,
         rect(d, 4, 4, 8, 8, outline)
         rect(d, 5, 5, 6, 6, base)
         rect(d, 7, 3, 2, 10, hi)
+    elif shape == "sword":
+        d.line((4, 12, 11, 5), fill=outline, width=4)
+        d.line((4, 12, 11, 5), fill=base, width=2)
+        d.line((6, 10, 12, 4), fill=hi, width=1)
+        d.line((2, 14, 5, 11), fill=outline, width=3)
+        d.line((2, 14, 5, 11), fill=(55, 43, 38, 255), width=1)
+        d.line((4, 10, 8, 14), fill=outline, width=3)
+        d.line((4, 10, 8, 14), fill=(214, 148, 57, 255), width=1)
     else:
         rect(d, 3, 6, 9, 6, outline)
         rect(d, 4, 6, 7, 5, base)
@@ -824,6 +1143,7 @@ def make_items() -> None:
         ("tomb_key", (155, 129, 80), (112, 206, 177), "relic"),
         ("drow_silk", (72, 65, 138), (160, 112, 220), "shard"),
         ("heat_core", (92, 22, 20), (255, 93, 36), "core"),
+        ("wooden_sword", (149, 82, 40), (228, 143, 67), "sword"),
     ]
     if AI_WORLD_REFERENCE.exists():
         src = Image.open(AI_WORLD_REFERENCE).convert("RGBA")
@@ -860,6 +1180,163 @@ def make_items() -> None:
         atlas.alpha_composite(icon, ((index % 6) * 16, (index // 6) * 16))
     atlas.save(ITEM_DIR / "item_icon_atlas.png")
     make_preview(atlas, PREVIEW_DIR / "item_icon_atlas_preview.png", scale=8, grid=(16, 16))
+
+
+def make_background_block_texture(background_id: str, base: tuple[int, int, int], hi: tuple[int, int, int], grain: str) -> Image.Image:
+    img = Image.new("RGBA", (16, 16), (*base, 220))
+    d = ImageDraw.Draw(img)
+    shadow = (max(base[0] - 32, 0), max(base[1] - 30, 0), max(base[2] - 26, 0), 230)
+    highlight = (*hi, 220)
+    if grain == "wood":
+        rect(d, 0, 0, 16, 16, (*base, 230))
+        for x in (3, 8, 13):
+            d.line((x, 1, x, 15), fill=shadow, width=1)
+        d.line((1, 4, 15, 3), fill=highlight, width=1)
+        d.line((1, 10, 15, 11), fill=shadow, width=1)
+        px(img, 6, 6, (*hi, 240))
+        px(img, 11, 13, (*hi, 210))
+    elif grain == "stone":
+        rect(d, 0, 0, 16, 16, (*base, 225))
+        d.line((0, 5, 8, 5, 8, 0), fill=shadow, width=1)
+        d.line((8, 10, 16, 10), fill=shadow, width=1)
+        d.line((4, 5, 4, 15), fill=(hi[0], hi[1], hi[2], 130), width=1)
+        px(img, 3, 3, highlight)
+        px(img, 12, 8, highlight)
+    else:
+        rect(d, 0, 0, 16, 16, (*base, 225))
+        d.line((1, 6, 14, 5), fill=shadow, width=1)
+        d.line((3, 11, 13, 12), fill=shadow, width=1)
+        px(img, 4, 3, highlight)
+        px(img, 10, 9, highlight)
+    img.save(BACKGROUND_DIR / f"{background_id}.png")
+    return img
+
+
+def make_background_item_icon(item_id: str, background: Image.Image) -> Image.Image:
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    outline = (28, 24, 30, 255)
+    rect(d, 2, 3, 12, 10, outline)
+    tile = background.crop((0, 0, 16, 16)).resize((10, 8), Image.Resampling.NEAREST)
+    img.alpha_composite(tile, (3, 4))
+    rect(d, 5, 13, 6, 2, outline)
+    px(img, 12, 5, (255, 238, 154, 210))
+    img.save(ITEM_DIR / f"{item_id}.png")
+    return img
+
+
+def make_background_assets() -> None:
+    specs = [
+        ("dirt_background_block", (70, 47, 36), (118, 77, 48), "dirt"),
+        ("stone_background_block", (54, 59, 68), (96, 105, 114), "stone"),
+        ("wooden_background_block", (87, 54, 32), (162, 101, 48), "wood"),
+    ]
+    atlas = Image.new("RGBA", (16 * len(specs), 32), (0, 0, 0, 0))
+    for index, (background_id, base, hi, grain) in enumerate(specs):
+        background = make_background_block_texture(background_id, base, hi, grain)
+        icon = make_background_item_icon(background_id, background)
+        atlas.alpha_composite(background, (index * 16, 0))
+        atlas.alpha_composite(icon, (index * 16, 16))
+    atlas.save(PREVIEW_DIR / "background_blocks_preview.png")
+    make_preview(atlas, PREVIEW_DIR / "background_blocks_preview_scaled.png", scale=8, grid=(16, 16))
+
+
+def make_wooden_sword_icon() -> Image.Image:
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    outline = PALETTE["outline_warm"]
+    wood = (149, 82, 40, 255)
+    wood_hi = (228, 143, 67, 255)
+    grip = (55, 43, 38, 255)
+    brass = (214, 148, 57, 255)
+    d.line((4, 12, 11, 5), fill=outline, width=4)
+    d.line((4, 12, 11, 5), fill=wood, width=2)
+    d.line((6, 10, 12, 4), fill=wood_hi, width=1)
+    d.line((2, 14, 5, 11), fill=outline, width=3)
+    d.line((2, 14, 5, 11), fill=grip, width=1)
+    d.line((4, 10, 8, 14), fill=outline, width=3)
+    d.line((4, 10, 8, 14), fill=brass, width=1)
+    px(img, 11, 4, wood_hi)
+    img.save(ITEM_DIR / "wooden_sword.png")
+    return img
+
+
+def make_weapon_assets() -> None:
+    sword_icon = make_wooden_sword_icon()
+    hand_sheet = Image.new("RGBA", (FRAME_W * COLS, FRAME_H), PALETTE["transparent"])
+    sword_sheet = Image.new("RGBA", (FRAME_W * COLS, FRAME_H), PALETTE["transparent"])
+    ready_hand_sheet = Image.new("RGBA", (FRAME_W * COLS, FRAME_H * READY_ROWS), PALETTE["transparent"])
+    ready_sword_sheet = Image.new("RGBA", (FRAME_W * COLS, FRAME_H * READY_ROWS), PALETTE["transparent"])
+    for frame in range(COLS):
+        draw_weapon_hand_overlay(hand_sheet, frame * FRAME_W, 0, frame)
+        draw_wooden_sword_overlay(sword_sheet, frame * FRAME_W, 0, frame)
+        for row in range(READY_ROWS):
+            draw_weapon_ready_hand_overlay(ready_hand_sheet, frame * FRAME_W, row * FRAME_H, frame, row)
+            draw_wooden_sword_ready_overlay(ready_sword_sheet, frame * FRAME_W, row * FRAME_H, frame, row)
+    hand_sheet.save(SPRITE_DIR / "weapon_hand_swing_sheet.png")
+    sword_sheet.save(SPRITE_DIR / "wooden_sword_swing_sheet.png")
+    ready_hand_sheet.save(SPRITE_DIR / "weapon_ready_hand_sheet.png")
+    ready_sword_sheet.save(SPRITE_DIR / "wooden_sword_ready_sheet.png")
+
+    preview = Image.new("RGBA", (FRAME_W * COLS, FRAME_H * 5 + 16), PALETTE["transparent"])
+    preview.alpha_composite(hand_sheet, (0, 0))
+    preview.alpha_composite(sword_sheet, (0, FRAME_H))
+    preview.alpha_composite(ready_hand_sheet, (0, FRAME_H * 2))
+    preview.alpha_composite(ready_sword_sheet, (0, FRAME_H * 2))
+    preview.alpha_composite(sword_icon, (0, FRAME_H * 5))
+    preview.save(PREVIEW_DIR / "weapon_modular_preview.png")
+    make_preview(hand_sheet, PREVIEW_DIR / "weapon_hand_swing_sheet_preview.png", scale=6, grid=(FRAME_W, FRAME_H))
+    make_preview(sword_sheet, PREVIEW_DIR / "wooden_sword_swing_sheet_preview.png", scale=6, grid=(FRAME_W, FRAME_H))
+    make_preview(ready_hand_sheet, PREVIEW_DIR / "weapon_ready_hand_sheet_preview.png", scale=6, grid=(FRAME_W, FRAME_H))
+    make_preview(ready_sword_sheet, PREVIEW_DIR / "wooden_sword_ready_sheet_preview.png", scale=6, grid=(FRAME_W, FRAME_H))
+
+
+def make_held_item_composite_preview(hand_sheet: Image.Image) -> None:
+    if (SPRITE_DIR / "delver_villager_sheet.png").exists():
+        player_sheet = Image.open(SPRITE_DIR / "delver_villager_sheet.png").convert("RGBA")
+    else:
+        player_sheet = make_clean_delver_sheet()
+    ready_hand_sheet = Image.open(SPRITE_DIR / "weapon_ready_hand_sheet.png").convert("RGBA")
+    ready_sword_sheet = Image.open(SPRITE_DIR / "wooden_sword_ready_sheet.png").convert("RGBA")
+    samples = [
+        ("dirt_clod", TILE_DIR / "loose_dirt.png"),
+        ("stone_chunk", TILE_DIR / "soft_stone.png"),
+        ("resin_shard", TILE_DIR / "hardened_resin.png"),
+        ("sandstone_shard", TILE_DIR / "sandstone_block.png"),
+        ("chest", PROP_DIR / "chest_closed.png"),
+        ("wooden_sword", None),
+    ]
+    composite = Image.new("RGBA", (FRAME_W * len(samples), FRAME_H * READY_ROWS), PALETTE["transparent"])
+    for col, (_item_id, asset_path) in enumerate(samples):
+        for row in range(READY_ROWS):
+            frame = [2, 3, 2][row]
+            cell = Image.new("RGBA", (FRAME_W, FRAME_H), PALETTE["transparent"])
+            base = player_sheet.crop((frame * FRAME_W, row * FRAME_H, (frame + 1) * FRAME_W, (row + 1) * FRAME_H))
+            cell.alpha_composite(base)
+            if asset_path is None:
+                sword = ready_sword_sheet.crop((frame * FRAME_W, row * FRAME_H, (frame + 1) * FRAME_W, (row + 1) * FRAME_H))
+                hand = ready_hand_sheet.crop((frame * FRAME_W, row * FRAME_H, (frame + 1) * FRAME_W, (row + 1) * FRAME_H))
+                cell.alpha_composite(sword)
+                cell.alpha_composite(hand)
+            else:
+                item = Image.open(asset_path).convert("RGBA")
+                item = item.resize((11, 11), Image.Resampling.NEAREST)
+                anchor = held_item_anchor_point(row, frame)
+                cell.alpha_composite(item, (anchor[0] - 6, anchor[1] - 6))
+                hand = hand_sheet.crop((frame * FRAME_W, row * FRAME_H, (frame + 1) * FRAME_W, (row + 1) * FRAME_H))
+                cell.alpha_composite(hand)
+            composite.alpha_composite(cell, (col * FRAME_W, row * FRAME_H))
+    make_preview(composite, PREVIEW_DIR / "held_item_composite_preview.png", scale=6, grid=(FRAME_W, FRAME_H))
+
+
+def make_held_item_assets() -> None:
+    hand_sheet = Image.new("RGBA", (FRAME_W * COLS, FRAME_H * READY_ROWS), PALETTE["transparent"])
+    for row in range(READY_ROWS):
+        for frame in range(COLS):
+            draw_held_item_hand_overlay(hand_sheet, frame * FRAME_W, row * FRAME_H, frame, row)
+    hand_sheet.save(SPRITE_DIR / "held_item_hand_sheet.png")
+    make_preview(hand_sheet, PREVIEW_DIR / "held_item_hand_sheet_preview.png", scale=6, grid=(FRAME_W, FRAME_H))
+    make_held_item_composite_preview(hand_sheet)
 
 
 def _shift_cell(cell: Image.Image, dx: int, dy: int) -> Image.Image:
@@ -963,6 +1440,34 @@ def make_enemy_sheet(enemy_id: str, base: tuple[int, int, int], highlight: tuple
     return sheet
 
 
+def make_goblin_enemy_assets() -> list[Image.Image]:
+    if AI_GOBLIN_VILLAGE_REFERENCE.exists():
+        src = Image.open(AI_GOBLIN_VILLAGE_REFERENCE).convert("RGBA")
+        rows = [
+            ("goblin_grunt", 86, [72, 204, 402, 600], (116, 116)),
+            ("goblin_slinger", 246, [72, 204, 430, 600], (116, 116)),
+            ("goblin_shaman", 394, [74, 204, 430, 600], (126, 126)),
+        ]
+        sheets: list[Image.Image] = []
+        for enemy_id, center_y, centers_x, crop_size in rows:
+            pose_cells: list[Image.Image] = []
+            for center_x in centers_x:
+                pose_cells.append(_crop_pixelized(src, (center_x, center_y), crop_size, (FRAME_W, FRAME_H), 28))
+            sheet = Image.new("RGBA", (FRAME_W * ENEMY_COLS, FRAME_H * ENEMY_ROWS), (0, 0, 0, 0))
+            for move_row, pose_cell in enumerate(pose_cells):
+                for frame in range(ENEMY_COLS):
+                    cell = _animated_enemy_cell(pose_cell, move_row, frame)
+                    sheet.alpha_composite(cell, (frame * FRAME_W, move_row * FRAME_H))
+            sheet.save(ENEMY_DIR / f"{enemy_id}.png")
+            sheets.append(sheet)
+        return sheets
+    return [
+        make_enemy_sheet("goblin_grunt", (91, 126, 48), (214, 183, 86), "humanoid"),
+        make_enemy_sheet("goblin_slinger", (124, 142, 61), (228, 190, 94), "humanoid"),
+        make_enemy_sheet("goblin_shaman", (97, 119, 52), (213, 190, 137), "humanoid"),
+    ]
+
+
 def make_enemies() -> None:
     specs = [
         ("cave_skitter", (139, 70, 80), (232, 213, 161), "skitter"),
@@ -1005,6 +1510,7 @@ def make_enemies() -> None:
                     sheet.alpha_composite(cell, (frame * FRAME_W, move_row * FRAME_H))
             sheet.save(ENEMY_DIR / f"{enemy_id}.png")
             sheets.append(sheet)
+        sheets.extend(make_goblin_enemy_assets())
         atlas = Image.new("RGBA", (FRAME_W * ENEMY_COLS, FRAME_H * ENEMY_ROWS * len(sheets)), (0, 0, 0, 0))
         for index, sheet in enumerate(sheets):
             atlas.alpha_composite(sheet, (0, index * FRAME_H * ENEMY_ROWS))
@@ -1015,6 +1521,7 @@ def make_enemies() -> None:
     sheets = []
     for spec in specs:
         sheets.append(make_enemy_sheet(*spec))
+    sheets.extend(make_goblin_enemy_assets())
     atlas = Image.new("RGBA", (FRAME_W * ENEMY_COLS, FRAME_H * ENEMY_ROWS * len(sheets)), (0, 0, 0, 0))
     for index, sheet in enumerate(sheets):
         atlas.alpha_composite(sheet, (0, index * FRAME_H * ENEMY_ROWS))
@@ -1394,6 +1901,7 @@ def make_tiles() -> None:
         atlas.save(TILE_DIR / "deepbound_tile_samples.png")
         make_preview(atlas, PREVIEW_DIR / "deepbound_tile_samples_preview.png", scale=8, grid=(16, 16))
         make_drow_village_assets()
+        make_goblin_village_assets()
         return
 
     make_tile("loose_dirt", (122, 75, 46), (168, 111, 60), (95, 61, 43))
@@ -1428,6 +1936,7 @@ def make_tiles() -> None:
     atlas.save(TILE_DIR / "deepbound_tile_samples.png")
     make_preview(atlas, PREVIEW_DIR / "deepbound_tile_samples_preview.png", scale=8, grid=(16, 16))
     make_drow_village_assets()
+    make_goblin_village_assets()
 
 
 def main() -> None:
@@ -1435,6 +1944,9 @@ def main() -> None:
     make_delver_sheet()
     make_tiles()
     make_items()
+    make_background_assets()
+    make_weapon_assets()
+    make_held_item_assets()
     make_enemies()
     make_ui_icons()
     make_props_and_effects()

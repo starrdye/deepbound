@@ -25,6 +25,19 @@ class RecordingMineWorld:
 		last_drill_heat = drill_heat
 		return {"broke": false, "progress": 0.1, "stage": 1, "drops": []}
 
+class CountingTargetWorld:
+	extends Node2D
+	var target_info_calls := 0
+	var mine_calls := 0
+	var last_can_target_background := false
+	func find_mining_target_info(_origin: Vector2, _aim: Vector2, _reach_tiles := 4.35, can_target_background := false) -> Dictionary:
+		target_info_calls += 1
+		last_can_target_background = can_target_background
+		return {"found": true, "tile": Vector2i(2, 0), "layer": "foreground", "id": "loose_dirt"}
+	func mine_at(_tile: Vector2i, _inventory, _delta: float, _drill_heat := 0.0, _layer := "foreground", _tool_item_id := "") -> Dictionary:
+		mine_calls += 1
+		return {"broke": false, "progress": 0.1, "stage": 1, "drops": []}
+
 func _initialize() -> void:
 	call_deferred("_run")
 
@@ -44,6 +57,7 @@ func _run() -> void:
 	_test_hotbar_key_actions_are_configured()
 	_test_mouse_wheel_cycles_hotbar_selection()
 	_test_drag_lock_blocks_player_actions()
+	await _test_mining_target_scans_are_cached()
 	await _test_non_drill_selection_uses_constant_mining_speed()
 	await _test_held_drill_does_not_auto_cycle_at_full_heat()
 	if failures.is_empty():
@@ -157,6 +171,46 @@ func _test_drag_lock_blocks_player_actions() -> void:
 	_assert(not player._is_weapon_swinging(), "drag lock should suppress weapon animation/action state")
 	_release_test_actions()
 	player.free()
+	main.free()
+
+func _test_mining_target_scans_are_cached() -> void:
+	_release_test_actions()
+	var main := MainController.new()
+	main._configure_input()
+	var world := CountingTargetWorld.new()
+	var player := PlayerController.new()
+	var sprite := Sprite2D.new()
+	sprite.name = "Sprite2D"
+	player.add_child(sprite)
+	get_root().add_child(world)
+	get_root().add_child(player)
+	await process_frame
+
+	player.world = world
+	player.global_position = Vector2.ZERO
+	player._update_mining(0.016)
+	_assert(world.target_info_calls == 1, "first mining target update should scan once")
+	for _i in range(8):
+		player._update_mining(0.016)
+	_assert(world.target_info_calls == 1, "idle target updates should reuse cached mining target info")
+
+	player.set_selected_hotbar_item("hammer")
+	player._update_mining(0.001)
+	_assert(world.target_info_calls == 2, "selecting the hammer should force a fresh target scan")
+	_assert(world.last_can_target_background, "hammer-selected target scans should include background blocks")
+
+	Input.action_press("drill")
+	player._update_mining(0.001)
+	_assert(world.target_info_calls == 3, "starting active drilling should force a fresh target scan")
+	player.global_position = Vector2(PlayerController.TARGET_ORIGIN_MIN_DELTA_PX + 1.0, 0.0)
+	player._update_mining(0.001)
+	_assert(world.target_info_calls == 3, "active drilling should not rescan every frame before the target scan interval")
+	player._update_mining(PlayerController.TARGET_SCAN_INTERVAL_SECONDS)
+	_assert(world.target_info_calls == 4, "active drilling should rescan after the scan interval when the player origin moves meaningfully")
+
+	_release_test_actions()
+	player.queue_free()
+	world.queue_free()
 	main.free()
 
 func _test_held_drill_does_not_auto_cycle_at_full_heat() -> void:

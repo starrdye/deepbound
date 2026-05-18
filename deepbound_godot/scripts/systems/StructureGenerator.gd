@@ -2,6 +2,7 @@ extends RefCounted
 class_name StructureGenerator
 
 const VillageCatalog = preload("res://scripts/catalogs/VillageCatalog.gd")
+const PrefabTemplateRegistry = preload("res://scripts/systems/PrefabTemplateRegistry.gd")
 
 const CHUNK_SIZE := 32
 const REGION_SIZE := Vector2i(96, 56)
@@ -14,6 +15,11 @@ const DOORWAY_CARVE_DEPTH := 6
 const RECT_PADDING := 2
 const STRUCTURE_SEARCH_MARGIN := 96
 const STARTER_AVOID_RECT := Rect2i(Vector2i(-40, 0), Vector2i(80, 48))
+const GOBLIN_SETPIECE_BUILDINGS := [
+	"goblin_ladder_shaft",
+	"goblin_raised_hut",
+	"goblin_scaffold_market",
+]
 
 static func hash_i(value: int) -> int:
 	var h := value & 0x7fffffff
@@ -32,24 +38,7 @@ static func _rand_range(seed: int, region_coord: Vector2i, salt: int, min_value:
 	return min_value + int(_region_hash(seed, region_coord, salt) % (max_value - min_value + 1))
 
 static func get_structures_overlapping_chunk(seed: int, chunk: Vector2i) -> Array[Dictionary]:
-	var chunk_rect := Rect2i(Vector2i(chunk.x * CHUNK_SIZE, chunk.y * CHUNK_SIZE), Vector2i(CHUNK_SIZE, CHUNK_SIZE))
-	var min_region := Vector2i(
-		floori(float(chunk_rect.position.x - STRUCTURE_SEARCH_MARGIN) / float(REGION_SIZE.x)),
-		floori(float(chunk_rect.position.y - STRUCTURE_SEARCH_MARGIN) / float(REGION_SIZE.y))
-	)
-	var max_region := Vector2i(
-		floori(float(chunk_rect.position.x + chunk_rect.size.x + STRUCTURE_SEARCH_MARGIN) / float(REGION_SIZE.x)),
-		floori(float(chunk_rect.position.y + chunk_rect.size.y + STRUCTURE_SEARCH_MARGIN) / float(REGION_SIZE.y))
-	)
-	var structures: Array[Dictionary] = []
-	for ry in range(min_region.y, max_region.y + 1):
-		for rx in range(min_region.x, max_region.x + 1):
-			var structure := build_goblin_village(seed, Vector2i(rx, ry))
-			if structure.is_empty():
-				continue
-			if _rects_intersect(structure.rect, chunk_rect):
-				structures.append(structure)
-	return structures
+	return PrefabTemplateRegistry.get_structures_overlapping_chunk(seed, chunk)
 
 static func build_goblin_village(seed: int, region_coord: Vector2i) -> Dictionary:
 	if not _is_goblin_region_eligible(seed, region_coord):
@@ -65,6 +54,7 @@ static func build_goblin_village(seed: int, region_coord: Vector2i) -> Dictionar
 	var buildings: Array[Dictionary] = []
 	var connectors: Array[Dictionary] = []
 	var tiles: Dictionary = {}
+	var backgrounds: Dictionary = {}
 	var spawns: Array[Dictionary] = []
 	var props: Array[Dictionary] = []
 
@@ -82,12 +72,12 @@ static func build_goblin_village(seed: int, region_coord: Vector2i) -> Dictionar
 
 	buildings.append(hub)
 	buildings.append(chamber)
-	_add_connector(_entrance_tile(hub, "right" if hub_left else "left"), int(hub.baseline), _entrance_tile(chamber, "left" if hub_left else "right"), int(chamber.baseline), connectors, tiles)
+	_add_connector(_entrance_tile(hub, "right" if hub_left else "left"), int(hub.baseline), _entrance_tile(chamber, "left" if hub_left else "right"), int(chamber.baseline), connectors)
 
 	var current_left := mini(int(hub.rect.position.x), int(chamber.rect.position.x))
 	var current_right := maxi(int(hub.rect.position.x + hub.rect.size.x), int(chamber.rect.position.x + chamber.rect.size.x))
 	var optional_ids := _optional_building_order(seed, region_coord, village)
-	var optional_count := mini(optional_ids.size(), 2 + _rand_range(seed, region_coord, 21, 0, 2))
+	var optional_count := mini(optional_ids.size(), 3 + _rand_range(seed, region_coord, 21, 0, 2))
 	var side_start := _rand_range(seed, region_coord, 22, 0, 1)
 	for index in range(optional_count):
 		var building_id := String(optional_ids[index])
@@ -105,22 +95,23 @@ static func build_goblin_village(seed: int, region_coord: Vector2i) -> Dictionar
 		buildings.append(instance)
 		if side < 0:
 			current_left = origin_x
-			_add_connector(_entrance_tile(instance, "right"), int(instance.baseline), _entrance_tile(chamber, "left"), int(chamber.baseline), connectors, tiles)
+			_add_connector(_entrance_tile(instance, "right"), int(instance.baseline), _entrance_tile(chamber, "left"), int(chamber.baseline), connectors, _goblin_connector_floor_tile(building_id))
 		else:
 			current_right = origin_x + footprint.x
-			_add_connector(_entrance_tile(chamber, "right"), int(chamber.baseline), _entrance_tile(instance, "left"), int(instance.baseline), connectors, tiles)
+			_add_connector(_entrance_tile(chamber, "right"), int(chamber.baseline), _entrance_tile(instance, "left"), int(instance.baseline), connectors, _goblin_connector_floor_tile(building_id))
 
 	for building in buildings:
-		_stamp_building(building, village, tiles, props, spawns)
+		_stamp_building(building, village, tiles, backgrounds, props, spawns)
 	var connector_air_tiles := {}
 	var connector_floor_tiles := {}
 	for connector in connectors:
 		_collect_connector_tiles(connector, connector_air_tiles, connector_floor_tiles)
 	for tile in connector_air_tiles.keys():
 		tiles[tile] = "air"
+		backgrounds[tile] = _goblin_connector_background_id(tile)
 	for tile in connector_floor_tiles.keys():
 		if not connector_air_tiles.has(tile):
-			tiles[tile] = "goblin_packed_floor"
+			tiles[tile] = String(connector_floor_tiles[tile])
 
 	var rect := _tiles_rect(tiles)
 	if rect.size == Vector2i.ZERO:
@@ -137,6 +128,7 @@ static func build_goblin_village(seed: int, region_coord: Vector2i) -> Dictionar
 		"buildings": buildings,
 		"connectors": connectors,
 		"tiles": tiles,
+		"backgrounds": backgrounds,
 		"props": props,
 		"spawns": spawns,
 	}
@@ -153,30 +145,26 @@ static func apply_structure_tiles(seed: int, chunk: Vector2i, base_tiles: Array[
 			result[local.y * CHUNK_SIZE + local.x] = String(structure.tiles[tile_coord])
 	return result
 
-static func get_structure_spawns_near(seed: int, center_tile: Vector2i, radius_tiles: int) -> Array[Dictionary]:
-	var search_rect := Rect2i(center_tile - Vector2i(radius_tiles, radius_tiles), Vector2i(radius_tiles * 2 + 1, radius_tiles * 2 + 1))
-	var min_region := Vector2i(
-		floori(float(search_rect.position.x - STRUCTURE_SEARCH_MARGIN) / float(REGION_SIZE.x)),
-		floori(float(search_rect.position.y - STRUCTURE_SEARCH_MARGIN) / float(REGION_SIZE.y))
-	)
-	var max_region := Vector2i(
-		floori(float(search_rect.position.x + search_rect.size.x + STRUCTURE_SEARCH_MARGIN) / float(REGION_SIZE.x)),
-		floori(float(search_rect.position.y + search_rect.size.y + STRUCTURE_SEARCH_MARGIN) / float(REGION_SIZE.y))
-	)
-	var results: Array[Dictionary] = []
-	for ry in range(min_region.y, max_region.y + 1):
-		for rx in range(min_region.x, max_region.x + 1):
-			var structure := build_goblin_village(seed, Vector2i(rx, ry))
-			if structure.is_empty() or not _rects_intersect(structure.rect, search_rect):
+static func apply_structure_backgrounds(seed: int, chunk: Vector2i, base_backgrounds: Array[String]) -> Array[String]:
+	var result: Array[String] = base_backgrounds.duplicate()
+	var chunk_rect := Rect2i(Vector2i(chunk.x * CHUNK_SIZE, chunk.y * CHUNK_SIZE), Vector2i(CHUNK_SIZE, CHUNK_SIZE))
+	for structure in get_structures_overlapping_chunk(seed, chunk):
+		for tile in Dictionary(structure.get("backgrounds", {})).keys():
+			var tile_coord: Vector2i = tile
+			if not _rect_contains_tile(chunk_rect, tile_coord):
 				continue
-			for spawn in structure.spawns:
-				var record: Dictionary = Dictionary(spawn).duplicate()
-				var spawn_tile: Vector2i = record.tile
-				record.structure_id = String(structure.id)
-				record.structure_type = String(structure.type)
-				record.position = Vector2((float(spawn_tile.x) + 0.5) * 16.0, float((spawn_tile.y + 1) * 16) - 0.5)
-				results.append(record)
-	return results
+			var local := Vector2i(tile_coord.x - chunk_rect.position.x, tile_coord.y - chunk_rect.position.y)
+			result[local.y * CHUNK_SIZE + local.x] = String(structure.backgrounds[tile_coord])
+	return result
+
+static func get_structure_spawns_near(seed: int, center_tile: Vector2i, radius_tiles: int) -> Array[Dictionary]:
+	return PrefabTemplateRegistry.get_structure_spawns_near(seed, center_tile, radius_tiles)
+
+static func get_structure_lights_near(seed: int, center_tile: Vector2i, radius_tiles: int) -> Array[Dictionary]:
+	return PrefabTemplateRegistry.get_structure_lights_near(seed, center_tile, radius_tiles)
+
+static func get_structure_containers_near(seed: int, center_tile: Vector2i, radius_tiles: int) -> Array[Dictionary]:
+	return PrefabTemplateRegistry.get_structure_containers_near(seed, center_tile, radius_tiles)
 
 static func _is_goblin_region_eligible(seed: int, region_coord: Vector2i) -> bool:
 	var region_rect := Rect2i(Vector2i(region_coord.x * REGION_SIZE.x, region_coord.y * REGION_SIZE.y), REGION_SIZE)
@@ -215,6 +203,10 @@ static func _optional_building_order(seed: int, region_coord: Vector2i, village:
 		rotated.append(ordered[(start + i) % ordered.size()])
 	if _rand_range(seed, region_coord, 24, 0, 1) == 1:
 		rotated.reverse()
+	var setpiece := String(GOBLIN_SETPIECE_BUILDINGS[_rand_range(seed, region_coord, 25, 0, GOBLIN_SETPIECE_BUILDINGS.size() - 1)])
+	if rotated.has(setpiece):
+		rotated.erase(setpiece)
+		rotated.insert(0, setpiece)
 	return rotated
 
 static func _overlaps_existing(instance: Dictionary, buildings: Array[Dictionary]) -> bool:
@@ -223,7 +215,7 @@ static func _overlaps_existing(instance: Dictionary, buildings: Array[Dictionary
 			return true
 	return false
 
-static func _stamp_building(building: Dictionary, village: Dictionary, tiles: Dictionary, props: Array[Dictionary], spawns: Array[Dictionary]) -> void:
+static func _stamp_building(building: Dictionary, village: Dictionary, tiles: Dictionary, backgrounds: Dictionary, props: Array[Dictionary], spawns: Array[Dictionary]) -> void:
 	var def := VillageCatalog.get_building(String(building.id))
 	var legend: Dictionary = village.symbol_legend
 	var origin: Vector2i = building.origin
@@ -240,21 +232,43 @@ static func _stamp_building(building: Dictionary, village: Dictionary, tiles: Di
 					tiles[tile] = String(entry.id)
 				"empty":
 					tiles[tile] = "air"
+					backgrounds[tile] = _goblin_building_background_id(String(building.id), symbol, Vector2i(x, y))
 				"prop":
 					tiles[tile] = "air"
-					props.append({"id": String(entry.id), "tile": tile, "building": String(building.id)})
+					backgrounds[tile] = _goblin_building_background_id(String(building.id), symbol, Vector2i(x, y))
+					var marker := {"id": String(entry.id), "tile": tile, "building": String(building.id)}
+					for metadata_key in ["size", "offset", "layer", "alpha"]:
+						if entry.has(metadata_key):
+							marker[metadata_key] = entry[metadata_key]
+					props.append(marker)
 				"spawn":
 					tiles[tile] = "air"
+					backgrounds[tile] = _goblin_building_background_id(String(building.id), symbol, Vector2i(x, y))
 					spawns.append({"enemy_id": String(entry.id), "tile": tile, "building": String(building.id)})
 
-static func _add_connector(a: Vector2i, a_baseline: int, b: Vector2i, b_baseline: int, connectors: Array[Dictionary], tiles: Dictionary) -> void:
-	connectors.append({"from": a, "to": b, "baseline_a": a_baseline, "baseline_b": b_baseline})
+static func _goblin_building_background_id(building_id: String, symbol: String, local_tile: Vector2i) -> String:
+	if symbol in ["B", "D"] or local_tile.y <= 2:
+		return "goblin_hide_background"
+	var salt := building_id.length() * 19
+	if hash_i(local_tile.x * 37 + local_tile.y * 71 + salt) % 11 == 0:
+		return "goblin_packed_earth_background"
+	return "goblin_timber_background"
+
+static func _goblin_connector_background_id(tile: Vector2i) -> String:
+	var h := hash_i(tile.x * 92821 + tile.y * 68917)
+	if h % 7 == 0:
+		return "goblin_timber_background"
+	return "goblin_packed_earth_background"
+
+static func _add_connector(a: Vector2i, a_baseline: int, b: Vector2i, b_baseline: int, connectors: Array[Dictionary], floor_tile := "goblin_packed_floor") -> void:
+	connectors.append({"from": a, "to": b, "baseline_a": a_baseline, "baseline_b": b_baseline, "floor_tile": floor_tile})
 
 static func _collect_connector_tiles(connector: Dictionary, air_tiles: Dictionary, floor_tiles: Dictionary) -> void:
 	var a: Vector2i = connector.from
 	var b: Vector2i = connector.to
 	var a_baseline := int(connector.baseline_a)
 	var b_baseline := int(connector.baseline_b)
+	var floor_tile := String(connector.get("floor_tile", "goblin_packed_floor"))
 	var min_x := mini(a.x, b.x) - DOORWAY_CARVE_DEPTH
 	var max_x := maxi(a.x, b.x) + DOORWAY_CARVE_DEPTH
 	var top_air := mini(a_baseline, b_baseline) - 3
@@ -263,7 +277,10 @@ static func _collect_connector_tiles(connector: Dictionary, air_tiles: Dictionar
 	for x in range(min_x, max_x + 1):
 		for y in range(top_air, bottom_air + 1):
 			air_tiles[Vector2i(x, y)] = true
-		floor_tiles[Vector2i(x, floor_y)] = true
+		floor_tiles[Vector2i(x, floor_y)] = floor_tile
+
+static func _goblin_connector_floor_tile(building_id: String) -> String:
+	return "goblin_plank_platform" if building_id in GOBLIN_SETPIECE_BUILDINGS else "goblin_packed_floor"
 
 static func _entrance_tile(building: Dictionary, side: String) -> Vector2i:
 	return building.entrances[side]

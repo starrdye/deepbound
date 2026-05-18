@@ -2,9 +2,20 @@ extends RefCounted
 class_name BandCatalog
 
 const BAND_HEIGHT_TILES := 384
+const SURFACE_MIN_TILE_Y := -96
 const SOLID_DARK_START_TILE_Y := 1920
 
 const BANDS := {
+	"surface_area": {
+		"name": "Surface Area",
+		"min_y": SURFACE_MIN_TILE_Y,
+		"max_y": -1,
+		"palette": {"shadow": Color8(31, 45, 50), "mid": Color8(63, 111, 53), "highlight": Color8(139, 173, 74), "accent": Color8(112, 189, 229)},
+		"hazards": ["open air", "thin cover", "old root breaks"],
+		"resources": ["dirt_clod", "stone_chunk"],
+		"ambient_light": 0.72,
+		"danger": 0
+	},
 	"standard_caverns": {
 		"name": "Band 1: Standard Caverns",
 		"min_y": 0,
@@ -68,6 +79,8 @@ const BANDS := {
 }
 
 static func resolve_band_id(tile_y: int) -> String:
+	if tile_y < 0:
+		return "surface_area"
 	if tile_y >= SOLID_DARK_START_TILE_Y:
 		return "solid_dark_blocks"
 	if tile_y < 384:
@@ -85,7 +98,8 @@ static func get_band(tile_y: int) -> Dictionary:
 
 static func get_depth_label(tile_y: int) -> String:
 	var band := get_band(tile_y)
+	if resolve_band_id(tile_y) == "surface_area":
+		return "%s / %dm above Band 1" % [band.name, absi(tile_y)]
 	if resolve_band_id(tile_y) == "solid_dark_blocks":
 		return "%s / %dm" % [band.name, tile_y]
 	return "%s / %dm" % [band.name, tile_y - int(band.min_y)]
-

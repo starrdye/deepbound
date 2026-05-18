@@ -19,7 +19,9 @@ const TEST_CHEST_CLICK_HALF_SIZE := Vector2(8, 8)
 const HOTBAR_SIZE := 6
 const WORLD_DROP_DRAG_THRESHOLD := 5.0
 const STRUCTURE_SPAWN_RADIUS_TILES := 28
-const STRUCTURE_SPAWN_CHECK_STEP_TILES := 8
+const STRUCTURE_SPAWN_CHECK_STEP_TILES := 16
+const STRUCTURE_SPAWN_CHECK_INTERVAL_SECONDS := 0.20
+const HUD_LIGHT_REFRESH_INTERVAL_SECONDS := 0.12
 
 const TRANSIENT_INPUT_ACTIONS := [
 	"move_left",
@@ -49,6 +51,10 @@ var held_world_drop_press_position := Vector2.ZERO
 var held_world_drop_dragging := false
 var spawned_structure_encounters: Dictionary = {}
 var last_structure_spawn_check_tile := Vector2i(999999, 999999)
+var structure_spawn_check_elapsed := STRUCTURE_SPAWN_CHECK_INTERVAL_SECONDS
+var hud_light_refresh_elapsed := HUD_LIGHT_REFRESH_INTERVAL_SECONDS
+var cached_hud_light := 1.0
+var cached_hud_light_tile := Vector2i(999999, 999999)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_FOCUS_IN:
@@ -104,7 +110,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_update_world_drop_drag(get_global_mouse_position())
 		get_viewport().set_input_as_handled()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	structure_spawn_check_elapsed += delta
+	hud_light_refresh_elapsed += delta
 	_set_player_drag_lock(_is_item_drag_active())
 	if not _is_item_drag_active():
 		if Input.is_action_just_pressed("debug_band_1"):
@@ -222,9 +230,12 @@ func _spawn_enemy(enemy_id: String, pos: Vector2) -> void:
 func _maybe_spawn_nearby_structure_encounters(force := false) -> void:
 	if world == null or player == null or enemies_node == null:
 		return
+	if not force and structure_spawn_check_elapsed < STRUCTURE_SPAWN_CHECK_INTERVAL_SECONDS:
+		return
 	var player_tile: Vector2i = world.world_to_tile(player.global_position)
 	if not force and abs(player_tile.x - last_structure_spawn_check_tile.x) < STRUCTURE_SPAWN_CHECK_STEP_TILES and abs(player_tile.y - last_structure_spawn_check_tile.y) < STRUCTURE_SPAWN_CHECK_STEP_TILES:
 		return
+	structure_spawn_check_elapsed = 0.0
 	last_structure_spawn_check_tile = player_tile
 	_spawn_nearby_structure_encounters(player_tile)
 
@@ -550,8 +561,7 @@ func _strike_nearby_enemy() -> void:
 
 func _update_hud() -> void:
 	var player_tile: Vector2i = world.world_to_tile(player.global_position)
-	var sources: Array[Dictionary] = world.get_light_sources(player.global_position)
-	var light: float = LightingSystem.sample_light(world.store, player_tile, sources)
+	var light := _hud_light_for_tile(player_tile)
 	var band: Dictionary = BandCatalog.get_band(player_tile.y)
 	var hostile_nearby := false
 	for child in enemies_node.get_children():
@@ -574,3 +584,15 @@ func _update_hud() -> void:
 		"selected_hotbar_index": selected_hotbar_index,
 		"active_item": _format_stack_label(active_stack)
 	})
+
+func _hud_light_for_tile(player_tile: Vector2i) -> float:
+	var tile_changed := player_tile != cached_hud_light_tile
+	var cache_empty := cached_hud_light_tile.x == 999999
+	var has_world_light_sources: bool = world.beacons.size() > 0 or world.flares.size() > 0
+	var interval_elapsed: bool = hud_light_refresh_elapsed >= HUD_LIGHT_REFRESH_INTERVAL_SECONDS
+	if cache_empty or (tile_changed and interval_elapsed) or (has_world_light_sources and interval_elapsed):
+		var sources: Array[Dictionary] = world.get_light_sources(player.global_position)
+		cached_hud_light = LightingSystem.sample_light(world.store, player_tile, sources)
+		cached_hud_light_tile = player_tile
+		hud_light_refresh_elapsed = 0.0
+	return cached_hud_light

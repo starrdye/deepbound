@@ -22,6 +22,9 @@ All moving entity colliders are bottom-center anchored. The visual sprite may ov
 | Cave Skitter | `20x12` | `14x10` | Legs overhang horizontally so the body reads in darkness without snagging tiles. |
 | Worker Ant | `24x12` | `18x10` | Antennae and mandibles are non-colliding silhouette features. |
 | Soldier Ant | `28x16` | `22x12` | Larger mandibles telegraph danger but do not widen collision unfairly. |
+| Dwarf Guard | `24x30` | `16x24` | Helmet, beard, shield, and hammer overhang the compact humanoid collider. |
+| Dwarf Crossbowman | `24x30` | `16x23` | Crossbow arms are visual-only and should not widen the collision body. |
+| Dwarf Smith | `26x31` | `18x25` | Hammer and apron pixels can overhang; feet stay bottom-center aligned. |
 | Lost Mummy | `24x32` | `14x28` | Robe strips and raised arms are visual overhangs. |
 | Tunneling Worm Head | `32x24` | `26x18` | Jaw flare is readable but should not make tunnel dodges feel unfair. |
 | Worm Segment | `16x16` | `12x12` | Segments follow the head path and should not catch on corners. |
@@ -34,6 +37,7 @@ Current generated/processed assets:
 - ChatGPT player art-board source: `assets/source_ai/villager_delver_ai_reference.png`
 - ChatGPT enemy art-board source: `assets/source_ai/enemy_roster_ai_reference.png`
 - ChatGPT world/UI/effects art-board source: `assets/source_ai/world_asset_ai_reference.png`
+- Dwarf fortress source board: `assets/source_ai/dwarf_fortress_ai_reference.png`
 - Engine player sheet: `assets/sprites/delver_villager_sheet.png`
 - Enemy sheets and atlas: `assets/enemies/*.png`
 - Terrain samples: `assets/tiles/*.png`
@@ -129,6 +133,13 @@ Worker Ant and Soldier Ant, worker `24x12` silhouette and soldier `28x16` silhou
 - Soldier palette: outline `#20151D`, shell `#8F5F22`, mandible `#F1B85B`, warning mark `#FF8A1F`.
 - Soldier mandibles must be larger than the worker silhouette, but attack range is shown with a bright pre-snap frame.
 
+Dwarf Guard, Dwarf Crossbowman, and Dwarf Smith, compact humanoid silhouettes inside `32x32` cells.
+
+- Shared palette: dark warm outline `#20151D`, granite metal `#596062`, brass `#D8AA53`, leather `#4E3A2C`, beard accents from rust orange to dark auburn.
+- Dwarf Guard: squat helmet, shield block, and hammer head. The weapon and shield can overhang visually, but combat collision stays narrow.
+- Dwarf Crossbowman: short stance with a horizontal crossbow silhouette. The bow limbs are non-colliding and must read clearly against forge and granite backgrounds.
+- Dwarf Smith: heavier apron/body, bright hammer spark, and ember highlight. The smith should feel like a fortress worker who can still fight.
+
 Lost Mummy, `24x32` silhouette inside a `32x32` cell.
 
 - Palette: outline `#2B2219`, wraps `#D2B36A`, shadow `#8F7750`, oxidized charm `#3E8F74`, curse glow `#70CEB1`.
@@ -140,6 +151,33 @@ Hazards:
 - Dart trap: `16x16` wall/floor variant, dark sandstone body with a 2-pixel bright aperture.
 - Dart projectile: `8x3`, high-contrast tip, one-frame streak at integer scale.
 - Pickups: `8x8` icons with 1-pixel colored rim and no black outline.
+
+### Dwarf Fortress Kit
+
+The Band 2 dwarf fortress uses a colder stone-and-metal construction language embedded in the warm resin band. It should read as an engineered pocket inside the Colossal Ant Chambers, not as another organic hive.
+
+Generated native assets:
+
+| Type | Asset IDs |
+| --- | --- |
+| Tiles | `dwarf_granite_brick`, `dwarf_cut_granite_floor`, `dwarf_ironbound_block`, `dwarf_rune_block`, `dwarf_iron_platform` |
+| Backgrounds | `dwarf_granite_background`, `dwarf_forge_background`, `dwarf_rune_background` |
+| Props | `dwarf_forge`, `dwarf_anvil`, `dwarf_lantern`, `dwarf_banner`, `dwarf_gate`, `dwarf_barrel`, `dwarf_ladder`, `dwarf_chain_lift`, `dwarf_bridge`, `dwarf_chest`, `dwarf_armor_rack`, `dwarf_back_tower_lit`, `dwarf_back_tower_dark`, `dwarf_ore_cart`, `dwarf_rune_marker` |
+| Enemies/NPC markers | `dwarf_guard`, `dwarf_crossbowman`, `dwarf_smith` |
+
+Preview atlas: `assets/previews/dwarf_fortress_kit_preview.png`.
+
+Template: `data/templates/dwarf_fortress_full.json`.
+
+Construction analysis:
+
+- Shell and towers use `dwarf_granite_brick` with `dwarf_ironbound_block` buttresses so the fortress reads as heavy and defensive.
+- Floors and room decks use `dwarf_cut_granite_floor`; bridge and shaft crossing pieces use `dwarf_iron_platform`.
+- Rune blocks mark corners, lift shafts, and important vertical route anchors.
+- Forge rooms use `dwarf_forge_background` plus forge/anvil/ore-cart props and warm lights.
+- Main halls use `dwarf_granite_background`; shrine/lift areas use `dwarf_rune_background`.
+- Ladders and chain lifts provide vertical movement cues. Gates, banners, back towers, and bridge props establish scale without changing collision.
+- `dwarf_chest` is a two-tile container prop and stamps a runtime chest marker on its bottom-left occupied cell.
 
 ### UI and HUD
 

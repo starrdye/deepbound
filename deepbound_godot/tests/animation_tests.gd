@@ -20,6 +20,7 @@ func _run() -> void:
 	_test_missing_texture_lookups_are_cached()
 	await _test_player_animation_rows()
 	await _test_airborne_animation_tracks_velocity_smoothly()
+	await _test_animation_dirty_state_tracks_applied_sprite()
 	await _test_camera_dead_zone_follow()
 	await _test_drag_lock_keeps_idle_animating()
 	if failures.is_empty():
@@ -192,6 +193,39 @@ func _test_airborne_animation_tracks_velocity_smoothly() -> void:
 	player.velocity = Vector2.ZERO
 	player._update_animation(0.08, 0.0)
 	_assert(not bool(player.get("airborne_animation_active")), "landing should reset airborne frame smoothing")
+	player.queue_free()
+
+func _test_animation_dirty_state_tracks_applied_sprite() -> void:
+	var player := PlayerController.new()
+	var sprite := Sprite2D.new()
+	sprite.name = "Sprite2D"
+	player.add_child(sprite)
+	get_root().add_child(player)
+	await process_frame
+
+	player.on_ground = false
+	player.velocity = Vector2(0, -120)
+	player._update_animation(0.0, 0.0)
+	var first_region := sprite.region_rect
+	var first_frame := int(player.get("applied_sprite_frame"))
+	var first_row := int(player.get("applied_sprite_row"))
+	player._update_animation(0.0, 0.0)
+	_assert(sprite.region_rect == first_region, "unchanged airborne animation state should keep the applied sprite region stable")
+	_assert(int(player.get("applied_sprite_frame")) == first_frame, "unchanged animation frames should reuse the cached applied frame")
+	_assert(int(player.get("applied_sprite_row")) == first_row, "unchanged animation rows should reuse the cached applied row")
+
+	player.velocity = Vector2(0, 460)
+	player._update_animation(0.08, 0.0)
+	_assert(int(player.get("applied_sprite_row")) == 2, "applied sprite cache should track the airborne row")
+	_assert(int(player.get("applied_sprite_frame")) == _frame_index(sprite), "applied sprite cache should track the rendered frame")
+
+	player.on_ground = true
+	player.velocity = Vector2.ZERO
+	player.facing = -1
+	player._update_animation(0.08, 0.0)
+	_assert(bool(player.get("applied_sprite_flip_h")), "applied sprite cache should track horizontal facing changes")
+	_assert(bool(sprite.flip_h), "sprite flip should still update when only facing changes")
+
 	player.queue_free()
 
 func _test_camera_dead_zone_follow() -> void:

@@ -6,18 +6,29 @@ const BackgroundCatalog = preload("res://scripts/catalogs/BackgroundCatalog.gd")
 var failures: Array[String] = []
 
 const TILE_IDS := [
+	"surface_grass",
+	"surface_loam",
+	"surface_root_loam",
+	"surface_stone",
 	"loose_dirt",
 	"compacted_dirt",
 	"soft_stone",
 	"copper_ore",
 	"hardened_resin",
 	"royal_jelly",
+	"dwarf_granite_brick",
+	"dwarf_cut_granite_floor",
+	"dwarf_ironbound_block",
+	"dwarf_rune_block",
+	"dwarf_iron_platform",
 	"sandstone_block",
 	"pressure_plate",
 	"cursed_treasure",
 	"goblin_timber_wall",
 	"goblin_packed_floor",
 	"goblin_hide_canopy",
+	"goblin_mossy_brick",
+	"goblin_plank_platform",
 	"glow_mushroom_loam",
 	"obsidian_ash",
 	"solid_dark_block"
@@ -30,6 +41,9 @@ const ENEMY_IDS := [
 	"goblin_shaman",
 	"worker_ant",
 	"soldier_ant",
+	"dwarf_guard",
+	"dwarf_crossbowman",
+	"dwarf_smith",
 	"mummy_sentry",
 	"tunneling_worm_head",
 	"tunneling_worm_segment",
@@ -45,6 +59,7 @@ const ITEM_IDS := [
 	"stone_chunk",
 	"copper_nugget",
 	"wooden_sword",
+	"hammer",
 	"dirt_background_block",
 	"stone_background_block",
 	"wooden_background_block",
@@ -81,10 +96,22 @@ const UI_IDS := [
 ]
 
 const BACKGROUND_IDS := [
+	"surface_root_background",
 	"dirt_background_block",
 	"stone_background_block",
-	"wooden_background_block"
+	"wooden_background_block",
+	"goblin_timber_background",
+	"goblin_hide_background",
+	"goblin_packed_earth_background",
+	"dwarf_granite_background",
+	"dwarf_forge_background",
+	"dwarf_rune_background"
 ]
+
+const SURFACE_IDS := {
+	"tree_backdrop": Vector2i(384, 192),
+	"rocks_backdrop": Vector2i(560, 192)
+}
 
 const UI_SHEETS := {
 	"heart_sheet": Vector2i(48, 16)
@@ -114,14 +141,25 @@ const BREAK_TILE_IDS := [
 	"copper_ore",
 	"hardened_resin",
 	"royal_jelly",
+	"dwarf_granite_brick",
+	"dwarf_cut_granite_floor",
+	"dwarf_ironbound_block",
+	"dwarf_rune_block",
+	"dwarf_iron_platform",
 	"sandstone_block",
 	"pressure_plate",
 	"cursed_treasure",
 	"goblin_timber_wall",
 	"goblin_packed_floor",
 	"goblin_hide_canopy",
+	"goblin_mossy_brick",
+	"goblin_plank_platform",
 	"glow_mushroom_loam",
-	"obsidian_ash"
+	"obsidian_ash",
+	"surface_grass",
+	"surface_loam",
+	"surface_root_loam",
+	"surface_stone"
 ]
 
 const PROP_IDS := [
@@ -137,9 +175,37 @@ const PROP_IDS := [
 	"goblin_banner",
 	"goblin_door_flap",
 	"goblin_palisade_post",
+	"goblin_rope_ladder",
+	"goblin_rope_bridge",
+	"goblin_scaffold_post",
+	"goblin_diagonal_brace",
+	"goblin_central_hut",
+	"goblin_back_hut_lit",
+	"goblin_back_hut_dark",
+	"goblin_work_shelf",
+	"goblin_wall_torch",
+	"dwarf_forge",
+	"dwarf_anvil",
+	"dwarf_lantern",
+	"dwarf_banner",
+	"dwarf_gate",
+	"dwarf_barrel",
+	"dwarf_ladder",
+	"dwarf_chain_lift",
+	"dwarf_bridge",
+	"dwarf_chest",
+	"dwarf_armor_rack",
+	"dwarf_back_tower_lit",
+	"dwarf_back_tower_dark",
+	"dwarf_ore_cart",
+	"dwarf_rune_marker",
 	"chest_closed",
 	"chest_open",
-	"chest_open_sheet"
+	"chest_open_sheet",
+	"surface_grass_clump",
+	"surface_flower_clump",
+	"surface_root_arch",
+	"surface_mushroom"
 ]
 
 const SOURCE_AI_IDS := [
@@ -149,10 +215,37 @@ const SOURCE_AI_IDS := [
 	"world_asset_ai_reference",
 	"drow_village_tiles_ai_reference",
 	"goblin_village_ai_reference",
+	"goblin_village_backgrounds_ai_reference",
+	"goblin_village_expansion_ai_reference",
+	"dwarf_fortress_ai_reference",
 	"chest_heart_ai_reference",
 	"weapon_modular_ai_reference",
-	"held_item_pose_ai_reference"
+	"held_item_pose_ai_reference",
+	"world_atlas_surface_reference"
 ]
+
+const PROP_SIZES := {
+	"goblin_rope_ladder": Vector2i(16, 48),
+	"goblin_rope_bridge": Vector2i(48, 16),
+	"goblin_scaffold_post": Vector2i(16, 48),
+	"goblin_diagonal_brace": Vector2i(32, 32),
+	"goblin_central_hut": Vector2i(64, 48),
+	"goblin_back_hut_lit": Vector2i(48, 32),
+	"goblin_back_hut_dark": Vector2i(48, 32),
+	"goblin_work_shelf": Vector2i(48, 32),
+	"goblin_wall_torch": Vector2i(16, 32),
+	"dwarf_forge": Vector2i(48, 32),
+	"dwarf_banner": Vector2i(16, 32),
+	"dwarf_gate": Vector2i(32, 48),
+	"dwarf_ladder": Vector2i(16, 48),
+	"dwarf_chain_lift": Vector2i(16, 48),
+	"dwarf_bridge": Vector2i(48, 16),
+	"dwarf_chest": Vector2i(32, 32),
+	"dwarf_armor_rack": Vector2i(16, 32),
+	"dwarf_back_tower_lit": Vector2i(64, 48),
+	"dwarf_back_tower_dark": Vector2i(64, 48),
+	"dwarf_ore_cart": Vector2i(32, 16)
+}
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -171,6 +264,7 @@ func _run() -> void:
 	_test_items()
 	_test_ui()
 	_test_effects_and_props()
+	_test_surface_backdrops()
 	if failures.is_empty():
 		print("Deepbound Godot asset tests passed.")
 		quit(0)
@@ -181,7 +275,7 @@ func _run() -> void:
 func _test_source_art_boards() -> void:
 	for source_id in SOURCE_AI_IDS:
 		var path := "res://assets/source_ai/%s.png" % source_id
-		_assert(FileAccess.file_exists(path), "missing ChatGPT art-board source %s" % path)
+		_assert(FileAccess.file_exists(path), "missing source art-board %s" % path)
 
 func _test_player_sheet() -> void:
 	var texture := TextureFactory.make_delver_sprite_sheet()
@@ -280,5 +374,17 @@ func _test_effects_and_props() -> void:
 			_assert(texture.get_width() == 256 and texture.get_height() == 32, "chest_open_sheet should be eight 32x32 frames")
 		elif prop_id.begins_with("chest_"):
 			_assert(texture.get_width() == 32 and texture.get_height() == 32, "%s should be 32x32" % prop_id)
+		elif PROP_SIZES.has(prop_id):
+			var expected: Vector2i = PROP_SIZES[prop_id]
+			_assert(texture.get_width() == expected.x and texture.get_height() == expected.y, "%s should be %dx%d" % [prop_id, expected.x, expected.y])
 		else:
 			_assert(texture.get_width() == 16 and texture.get_height() == 16, "%s should be 16x16" % prop_id)
+
+func _test_surface_backdrops() -> void:
+	for surface_id in SURFACE_IDS:
+		var path := "res://assets/surface/%s.png" % surface_id
+		_assert(FileAccess.file_exists(path), "missing surface backdrop asset %s" % path)
+		var texture := TextureFactory.make_surface_texture(surface_id)
+		var expected: Vector2i = SURFACE_IDS[surface_id]
+		_assert(texture != null, "surface backdrop should load for %s" % surface_id)
+		_assert(texture.get_width() == expected.x and texture.get_height() == expected.y, "surface backdrop %s should be %dx%d" % [surface_id, expected.x, expected.y])

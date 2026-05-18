@@ -9,8 +9,9 @@ This repository now contains:
 - A Phaser + Vite + TypeScript browser vertical slice in `prototype/`.
 - A Godot 4.6 playable prototype in `deepbound_godot/`.
 - Deterministic chunk generation for the five-Band world model.
-- Band 1 movement, swept collision, mining, physical drops, grid inventory, extra-slot hotbar, chest containers, heart HUD, lighting, starter enemy pressure, and Godot `Control` UI.
-- Vitest coverage for the Phaser reference build, plus Godot headless tests for bands, generation, mining, collision, animation, hearts, chests, inventory, and pickups.
+- Band 1 movement, swept collision, mining, physical drops, grid inventory, extra-slot hotbar, chest containers, heart HUD, lighting, starter enemy pressure, cached terrain rendering, and Godot `Control` UI.
+- A template-backed settlement system with a standalone prefab designer, the imported Band 1 goblin village, and a Band 2 dwarf fortress prefab.
+- Vitest coverage for the Phaser reference build, plus Godot headless tests for bands, generation, mining, collision, animation, assets, hearts, chests, inventory, settlements, prefabs, spawning, and movement performance.
 - Godot gameplay docs in `deepbound_godot/docs/Gameplay.md`.
 - Gold Master roadmap docs under `Docs/GoldMaster/`.
 
@@ -46,6 +47,9 @@ Godot prototype:
 godot4 --headless --path deepbound_godot --quit-after 1
 godot4 --headless --path deepbound_godot --script tests/smoke_tests.gd
 godot4 --headless --path deepbound_godot --script tests/inventory_tests.gd
+godot4 --headless --path deepbound_godot --script tests/prefab_template_tests.gd
+godot4 --headless --path deepbound_godot --script tests/dwarf_fortress_tests.gd
+godot4 --headless --path deepbound_godot --script tests/movement_perf_tests.gd
 ```
 
 ## Controls

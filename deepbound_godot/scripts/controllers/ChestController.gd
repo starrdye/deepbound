@@ -19,11 +19,12 @@ var seed_default_contents := false
 @onready var sprite: Sprite2D = get_node_or_null("Sprite2D")
 
 func _ready() -> void:
-	if seed_default_contents and inventory.count_item("copper_nugget") == 0 and inventory.count_item("stone_chunk") == 0 and inventory.count_item("wooden_sword") == 0 and inventory.count_item("wooden_background_block") == 0:
+	if seed_default_contents and inventory.count_item("copper_nugget") == 0 and inventory.count_item("stone_chunk") == 0 and inventory.count_item("wooden_sword") == 0 and inventory.count_item("wooden_background_block") == 0 and inventory.count_item("hammer") == 0:
 		inventory.add_item("copper_nugget", 6)
 		inventory.add_item("stone_chunk", 12)
 		inventory.add_item("wooden_sword", 1)
 		inventory.add_item("wooden_background_block", 10)
+		inventory.add_item("hammer", 1)
 	if sprite == null:
 		sprite = Sprite2D.new()
 		sprite.name = "Sprite2D"

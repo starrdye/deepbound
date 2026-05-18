@@ -10,7 +10,7 @@ The Delver starts in Band 1 near a test chest and a starter cave skitter encount
 2. Drill adjacent blocks until they crack, break, and award drops.
 3. Collect resources into the personal inventory.
 4. Manage resources through the extra hotbar, chest inventory, and world drops.
-5. Watch health, drill heat, local light, and danger while descending toward Bands 2 and 3 test hooks.
+5. Watch health, drill heat, local light, and danger while descending through template-backed settlements such as Band 1 goblin villages and Band 2 dwarf fortresses.
 
 ## Controls
 
@@ -44,6 +44,19 @@ Mining targets the nearest valid tile in the drill direction. Tile definitions c
 Break feedback is material-specific. Dirt, stone, copper, resin, sandstone, drow materials, pressure plates, cursed treasure, and other current tile classes each have matching crack/break sheets under `assets/effects/` so breaking reads as a transformation of that material rather than a generic overlay.
 
 When a tile breaks, its drops try to enter the player inventory. If inventory space is unavailable, remaining drops can stay or be spawned into the world depending on the calling system.
+
+## Settlements And Templates
+
+Underground settlements are generated from sparse prefab templates under `data/templates/`. These templates stamp foreground tiles, background walls, props, lights, containers, and enemy/NPC spawn markers into deterministic spawn regions.
+
+Current built-in settlement templates:
+
+- `goblin_village_full`: Band 1 `standard_caverns`, imported from the original goblin village generator.
+- `dwarf_fortress_full`: Band 2 `colossal_ant_chambers`, built from granite brick, cut granite floors, ironbound supports, rune blocks, forge walls, ladders, bridge decks, lanterns, chests, and dwarf spawn markers.
+
+Template props can be decorative, lights, or containers. Container props stamp runtime `chest_block` collision markers so storage remains compatible with the existing chest/container systems. Light props expose structure light markers for the world lighting pass.
+
+Developers can launch `scenes/PrefabDesigner.tscn` to author or edit templates using the same in-game tile, background, prop, and enemy catalogs.
 
 ## Inventory
 
@@ -164,8 +177,15 @@ The current gameplay systems are covered by these Godot scripts:
 - `tests/smoke_tests.gd`: project boot, bands, mining, economy, lighting, Sprint 4/5 hooks
 - `tests/collision_tests.gd`: swept tile collision, dropped item collision, and anti-embedding rules
 - `tests/spawn_tests.gd`: enemy spawn clearance
+- `tests/background_tests.gd`: background wall placement and break behavior
 - `tests/input_tests.gd`: jump, focus-loss, inventory key, and hotbar key/scroll behavior
 - `tests/animation_tests.gd`: drill and weapon animation state
+- `tests/asset_tests.gd`: generated pixel assets, source boards, previews, and material break sheets
 - `tests/heart_tests.gd`: full, half, and empty heart logic
 - `tests/chest_tests.gd`: block-backed chest open/close, mining spill drops, hotbar placement, and placement rejection behavior
 - `tests/inventory_tests.gd`: stack merge/swap, extra hotbar storage, hotbar drag/drop, manual world-item dragging, click pickup, and special auto-pickup
+- `tests/village_template_tests.gd`: legacy village catalog metadata and building templates
+- `tests/goblin_village_tests.gd`: goblin village reference generation and template-backed chunk overlays
+- `tests/prefab_template_tests.gd`: prefab JSON validation, designer operations, import, and worldgen integration
+- `tests/dwarf_fortress_tests.gd`: Band 2 dwarf fortress assets, template validation, spawning, lights, containers, and chunk overlay stability
+- `tests/movement_perf_tests.gd`: cached terrain redraw, camera movement, chunk warm-ahead, and template-heavy fall regressions

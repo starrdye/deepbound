@@ -3,6 +3,7 @@ extends SceneTree
 const ChestController = preload("res://scripts/controllers/ChestController.gd")
 const MainController = preload("res://scripts/Main.gd")
 const DeepboundWorld = preload("res://scripts/World.gd")
+const BackgroundCatalog = preload("res://scripts/catalogs/BackgroundCatalog.gd")
 const InventorySystem = preload("res://scripts/systems/InventorySystem.gd")
 
 var failures: Array[String] = []
@@ -93,6 +94,7 @@ func _test_spawn_area_test_chest() -> void:
 		_assert(chest.global_position == world.tile_to_world_center(chest_tile), "spawn chest visual should be centered inside one grid cell")
 		_assert(chest.inventory.slots.size() == 18 and chest.inventory.hotbar.size() == 0, "chest storage should be 18 slots with no hidden hotbar")
 		_assert(chest.inventory.count_item("wooden_sword") == 1, "spawn chest should seed a test wooden sword")
+		_assert(chest.inventory.count_item("hammer") == 1, "spawn chest should seed one hammer for background wall mining")
 		_assert(chest.inventory.count_item("wooden_background_block") == 10, "spawn chest should seed ten wooden background blocks for wall placement testing")
 	main._spawn_test_chest()
 	_assert(props.get_child_count() == 1, "test chest setup should be idempotent")
@@ -148,17 +150,18 @@ func _test_chest_mining_spills_physical_drops() -> void:
 	_assert(world.get_tile(tile) == "air", "broken chest block should become air")
 	_assert(world.get_chest_at_tile(tile) == null, "broken chest should be removed from the container store")
 	_assert(main.active_container == null, "breaking an open chest should close the active container UI state")
-	_assert(player.inventory.count_item("copper_nugget") == 0 and player.inventory.count_item("stone_chunk") == 0 and player.inventory.count_item("wooden_sword") == 0 and player.inventory.count_item("wooden_background_block") == 0, "spilled chest contents should not enter player inventory automatically")
-	_assert(drops.get_child_count() == 5, "broken seeded chest should spawn chest, copper, stone, wooden sword, and background block drops")
+	_assert(player.inventory.count_item("copper_nugget") == 0 and player.inventory.count_item("stone_chunk") == 0 and player.inventory.count_item("wooden_sword") == 0 and player.inventory.count_item("hammer") == 0 and player.inventory.count_item("wooden_background_block") == 0, "spilled chest contents should not enter player inventory automatically")
+	_assert(drops.get_child_count() == 6, "broken seeded chest should spawn chest, copper, stone, wooden sword, hammer, and background block drops")
 	_assert(_drop_count(drops, "chest") == 1, "broken chest should drop one empty chest item")
 	_assert(_drop_count(drops, "copper_nugget") == 6, "broken seeded chest should spill copper stack")
 	_assert(_drop_count(drops, "stone_chunk") == 12, "broken seeded chest should spill stone stack")
 	_assert(_drop_count(drops, "wooden_sword") == 1, "broken seeded chest should spill wooden sword stack")
+	_assert(_drop_count(drops, "hammer") == 1, "broken seeded chest should spill hammer stack")
 	_assert(_drop_count(drops, "wooden_background_block") == 10, "broken seeded chest should spill wooden background blocks")
 	for child in drops.get_children():
 		child.pickup_delay = 0.0
 		child._process(0.016)
-	_assert(player.inventory.count_item("copper_nugget") == 0 and player.inventory.count_item("stone_chunk") == 0 and player.inventory.count_item("wooden_sword") == 0 and player.inventory.count_item("wooden_background_block") == 0, "spilled drops should remain manual-click pickups")
+	_assert(player.inventory.count_item("copper_nugget") == 0 and player.inventory.count_item("stone_chunk") == 0 and player.inventory.count_item("wooden_sword") == 0 and player.inventory.count_item("hammer") == 0 and player.inventory.count_item("wooden_background_block") == 0, "spilled drops should remain manual-click pickups")
 	props.free()
 	drops.free()
 	player.free()
@@ -195,6 +198,7 @@ func _test_hotbar_chest_and_block_placement() -> void:
 
 	player.inventory.set_hotbar_slot(1, "stone_chunk", 1)
 	var far_reachable_tile := Vector2i(4, -1)
+	world.set_tile(far_reachable_tile, "air")
 	_assert(main._try_place_selected_hotbar_item(world.tile_to_world_center(far_reachable_tile)), "tripled placement reach should allow farther tiles")
 	_assert(world.get_tile(far_reachable_tile) == "soft_stone", "stone_chunk should place soft_stone at the farther reachable tile")
 
@@ -208,6 +212,8 @@ func _test_hotbar_chest_and_block_placement() -> void:
 	player.inventory.set_hotbar_slot(3, "wooden_background_block", 2)
 	main._select_hotbar_index(3)
 	var background_tile := Vector2i(2, -1)
+	world.set_tile(background_tile, "air")
+	world.set_background_tile(background_tile, BackgroundCatalog.EMPTY_ID)
 	_assert(main._try_place_selected_hotbar_item(world.tile_to_world_center(background_tile)), "background block item should place a non-solid background wall")
 	_assert(world.get_background_tile(background_tile) == "wooden_background_block", "wooden background item should set the background layer")
 	_assert(world.get_tile(background_tile) == "air", "background placement should not affect foreground terrain")
@@ -215,6 +221,7 @@ func _test_hotbar_chest_and_block_placement() -> void:
 
 	var behind_solid_tile := Vector2i(3, -1)
 	world.set_tile(behind_solid_tile, "soft_stone")
+	world.set_background_tile(behind_solid_tile, BackgroundCatalog.EMPTY_ID)
 	_assert(main._try_place_selected_hotbar_item(world.tile_to_world_center(behind_solid_tile)), "background block placement should work behind foreground terrain")
 	_assert(world.get_background_tile(behind_solid_tile) == "wooden_background_block", "background layer should place behind solid foreground blocks")
 	_assert(world.get_tile(behind_solid_tile) == "soft_stone", "placing a background block behind terrain should keep the foreground block")
@@ -255,6 +262,7 @@ func _test_placement_preview_state() -> void:
 	player.global_position = Vector2.ZERO
 	var valid_tile := Vector2i(4, -1)
 	var invalid_tile := Vector2i(0, -1)
+	world.set_tile(valid_tile, "air")
 	_assert(world.is_placeable_tile_clear(valid_tile, player.global_position), "preview validation should accept farther reachable clear tiles")
 	_assert(not world.is_placeable_tile_clear(invalid_tile, player.global_position), "preview validation should reject player-overlap tiles")
 	world.set_placement_preview(valid_tile, true, true)

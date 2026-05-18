@@ -26,7 +26,15 @@ const DROW_PROP_IDS := [
 const GOBLIN_TILE_IDS := [
 	"goblin_timber_wall",
 	"goblin_packed_floor",
-	"goblin_hide_canopy"
+	"goblin_hide_canopy",
+	"goblin_mossy_brick",
+	"goblin_plank_platform"
+]
+
+const GOBLIN_BACKGROUND_IDS := [
+	"goblin_timber_background",
+	"goblin_hide_background",
+	"goblin_packed_earth_background"
 ]
 
 const GOBLIN_PROP_IDS := [
@@ -36,7 +44,16 @@ const GOBLIN_PROP_IDS := [
 	"goblin_torch",
 	"goblin_banner",
 	"goblin_door_flap",
-	"goblin_palisade_post"
+	"goblin_palisade_post",
+	"goblin_rope_ladder",
+	"goblin_rope_bridge",
+	"goblin_scaffold_post",
+	"goblin_diagonal_brace",
+	"goblin_central_hut",
+	"goblin_back_hut_lit",
+	"goblin_back_hut_dark",
+	"goblin_work_shelf",
+	"goblin_wall_torch"
 ]
 
 const DROW_SYMBOLS := {
@@ -64,6 +81,8 @@ const GOBLIN_SYMBOLS := {
 	"#": {"kind": "tile", "id": "goblin_timber_wall"},
 	"=": {"kind": "tile", "id": "goblin_packed_floor"},
 	"^": {"kind": "tile", "id": "goblin_hide_canopy"},
+	"M": {"kind": "tile", "id": "goblin_mossy_brick"},
+	"-": {"kind": "tile", "id": "goblin_plank_platform"},
 	"P": {"kind": "prop", "id": "goblin_palisade_post"},
 	"A": {"kind": "prop", "id": "goblin_bone_altar"},
 	"C": {"kind": "prop", "id": "goblin_crate"},
@@ -71,6 +90,15 @@ const GOBLIN_SYMBOLS := {
 	"T": {"kind": "prop", "id": "goblin_torch"},
 	"B": {"kind": "prop", "id": "goblin_banner"},
 	"D": {"kind": "prop", "id": "goblin_door_flap"},
+	"L": {"kind": "prop", "id": "goblin_rope_ladder", "size": [1, 3]},
+	"~": {"kind": "prop", "id": "goblin_rope_bridge", "size": [3, 1]},
+	"|": {"kind": "prop", "id": "goblin_scaffold_post", "size": [1, 3]},
+	"/": {"kind": "prop", "id": "goblin_diagonal_brace", "size": [2, 2]},
+	"H": {"kind": "prop", "id": "goblin_central_hut", "size": [4, 3]},
+	"h": {"kind": "prop", "id": "goblin_back_hut_lit", "size": [3, 2], "layer": "backdrop", "alpha": 0.55},
+	"j": {"kind": "prop", "id": "goblin_back_hut_dark", "size": [3, 2], "layer": "backdrop", "alpha": 0.48},
+	"W": {"kind": "prop", "id": "goblin_work_shelf", "size": [3, 2]},
+	"F": {"kind": "prop", "id": "goblin_wall_torch", "size": [1, 2]},
 	"g": {"kind": "spawn", "id": "goblin_grunt"},
 	"s": {"kind": "spawn", "id": "goblin_slinger"},
 	"m": {"kind": "spawn", "id": "goblin_shaman"}
@@ -238,26 +266,26 @@ const GOBLIN_BUILDINGS := {
 	},
 	"goblin_village_chamber": {
 		"name": "Goblin Village Chamber",
-		"role": "Main hostile village room and connection anchor.",
+		"role": "Main hostile village room, central hut facade, and connection anchor.",
 		"footprint": [29, 13],
 		"floor_row": 11,
 		"entrances": {"left": [0, 10], "right": [28, 10]},
-		"required_tiles": ["goblin_timber_wall", "goblin_packed_floor", "goblin_hide_canopy"],
-		"required_props": ["goblin_torch", "goblin_banner"],
+		"required_tiles": ["goblin_timber_wall", "goblin_packed_floor", "goblin_hide_canopy", "goblin_mossy_brick", "goblin_plank_platform"],
+		"required_props": ["goblin_torch", "goblin_banner", "goblin_central_hut", "goblin_back_hut_lit", "goblin_back_hut_dark", "goblin_work_shelf", "goblin_wall_torch"],
 		"layout": [
 			"____^^^^^^^^^^^^^^^^^^^^^____",
 			"____#####...........#####____",
 			"__#####...............#####__",
 			"_#####.................#####_",
-			"####.....................####",
-			"###........g.....s........###",
+			"####........h...j........####",
+			"###........g..H..s........###",
 			"##.........................##",
-			"##.............T...........##",
-			"##.........................##",
+			"##.............F...........##",
+			"##.........W...............##",
 			"###.......................###",
 			"_#####.................#####_",
-			"=============================",
-			"============================="
+			"MMMMM===================MMMMM",
+			"MMMMM=======---=========MMMMM"
 		]
 	},
 	"goblin_altar": {
@@ -328,8 +356,8 @@ const GOBLIN_BUILDINGS := {
 		"footprint": [11, 13],
 		"floor_row": 11,
 		"entrances": {"left": [0, 10], "right": [10, 10]},
-		"required_tiles": ["goblin_timber_wall", "goblin_packed_floor"],
-		"required_props": ["goblin_palisade_post", "goblin_torch"],
+		"required_tiles": ["goblin_timber_wall", "goblin_packed_floor", "goblin_plank_platform"],
+		"required_props": ["goblin_palisade_post", "goblin_torch", "goblin_rope_ladder"],
 		"layout": [
 			"____P______",
 			"___PPP_____",
@@ -337,8 +365,8 @@ const GOBLIN_BUILDINGS := {
 			"___#T#_____",
 			"___###_____",
 			"___#s#_____",
-			"___###_____",
-			"__#####____",
+			"___#L#_____",
+			"__#---#____",
 			"_###...###_",
 			"###.....###",
 			"##.......##",
@@ -364,6 +392,80 @@ const GOBLIN_BUILDINGS := {
 			"_###..D..###_",
 			"=============",
 			"============="
+		]
+	},
+	"goblin_ladder_shaft": {
+		"name": "Goblin Ladder Shaft",
+		"role": "Vertical traversal read with rope ladders, scaffold posts, and small platform perches.",
+		"footprint": [13, 16],
+		"floor_row": 14,
+		"entrances": {"left": [0, 13], "right": [12, 13]},
+		"required_tiles": ["goblin_mossy_brick", "goblin_plank_platform", "goblin_packed_floor"],
+		"required_props": ["goblin_rope_ladder", "goblin_rope_bridge", "goblin_scaffold_post", "goblin_diagonal_brace", "goblin_wall_torch"],
+		"layout": [
+			"__M###M###M__",
+			"_M#.......#M_",
+			"M#...|.....#M",
+			"M#...L..F..#M",
+			"M#...L.....#M",
+			"M#---L---s-#M",
+			"M#...L.....#M",
+			"M#...L..~..#M",
+			"M#---L-----#M",
+			"M#...L.....#M",
+			"M#...L..F..#M",
+			"M#.../.....#M",
+			"_M#.......#M_",
+			"===-----=====",
+			"=============",
+			"MMMMMMMMMMMMM"
+		]
+	},
+	"goblin_raised_hut": {
+		"name": "Raised Hide Hut",
+		"role": "Foreground hut facade on planks with distant background huts tucked into the cave wall.",
+		"footprint": [23, 14],
+		"floor_row": 12,
+		"entrances": {"left": [0, 11], "right": [22, 11]},
+		"required_tiles": ["goblin_mossy_brick", "goblin_plank_platform", "goblin_hide_canopy", "goblin_packed_floor"],
+		"required_props": ["goblin_central_hut", "goblin_back_hut_lit", "goblin_back_hut_dark", "goblin_crate", "goblin_door_flap", "goblin_wall_torch"],
+		"layout": [
+			"_____^^^^^^^^^^^^^_____",
+			"___MM###.......###MM___",
+			"__M##.............##M__",
+			"_M##.....h...j.....##M_",
+			"M##.................##M",
+			"M##......H..........##M",
+			"M##.................##M",
+			"M##....C.....C......##M",
+			"M##........g........##M",
+			"M##.................##M",
+			"_M##.....D.....F...##M_",
+			"---=======---=======---",
+			"MMMMM=============MMMMM",
+			"MMMMMMMMMMMMMMMMMMMMMMM"
+		]
+	},
+	"goblin_scaffold_market": {
+		"name": "Scaffold Market Shelf",
+		"role": "Workbench and shelf room with rope bridge reads and rough scaffold floor pieces.",
+		"footprint": [19, 11],
+		"floor_row": 9,
+		"entrances": {"left": [0, 8], "right": [18, 8]},
+		"required_tiles": ["goblin_mossy_brick", "goblin_plank_platform", "goblin_hide_canopy", "goblin_packed_floor"],
+		"required_props": ["goblin_work_shelf", "goblin_rope_bridge", "goblin_crate", "goblin_wall_torch"],
+		"layout": [
+			"__^^^^^^^^^^^^^^^__",
+			"_M##...........##M_",
+			"M##......W......##M",
+			"M##.............##M",
+			"M##..C..F..C....##M",
+			"M##.............##M",
+			"M##..~.....~....##M",
+			"_M##....s......##M_",
+			"===-----===-----===",
+			"MMMMM=========MMMMM",
+			"MMMMMMMMMMMMMMMMMMM"
 		]
 	}
 }
@@ -410,13 +512,14 @@ const GOBLIN_VILLAGE := {
 	"band": "standard_caverns",
 	"tile_y_range": [48, 340],
 	"preferred_anchor": "wide Band 1 cave pocket or carved horizontal structure pocket",
-	"minimum_clearance_tiles": [68, 18],
+	"minimum_clearance_tiles": [76, 24],
 	"baseline_jitter_tiles": 2,
 	"required_tiles": GOBLIN_TILE_IDS,
+	"required_backgrounds": GOBLIN_BACKGROUND_IDS,
 	"required_props": GOBLIN_PROP_IDS,
 	"symbol_legend": GOBLIN_SYMBOLS,
 	"required_buildings": ["goblin_hub", "goblin_village_chamber"],
-	"optional_buildings": ["goblin_altar", "goblin_barracks", "goblin_storehouse", "goblin_watch_post", "goblin_cage"],
+	"optional_buildings": ["goblin_altar", "goblin_barracks", "goblin_storehouse", "goblin_watch_post", "goblin_cage", "goblin_ladder_shaft", "goblin_raised_hut", "goblin_scaffold_market"],
 	"building_order": [
 		"goblin_hub",
 		"goblin_village_chamber",
@@ -424,14 +527,20 @@ const GOBLIN_VILLAGE := {
 		"goblin_barracks",
 		"goblin_storehouse",
 		"goblin_watch_post",
-		"goblin_cage"
+		"goblin_cage",
+		"goblin_ladder_shaft",
+		"goblin_raised_hut",
+		"goblin_scaffold_market"
 	],
 	"generation_rules": [
 		"Place the empty hub first as the approach room.",
-		"Place the larger village chamber next to the hub on the same baseline.",
+		"Place the larger village chamber next to the hub on the same baseline, using the hut facade as the visual focal point.",
 		"Attach two to four optional rooms to the chamber and keep entrances within two tiles of the chamber baseline.",
+		"Use ladder shafts, plank platforms, rope bridge props, and scaffold posts to imply stacked settlement routes inside a mostly horizontal pocket.",
+		"Place backdrop-only hut facades behind foreground floors and walls for distant decorative dwellings.",
 		"Reject padded building rectangles that overlap.",
-		"Connect every room with a three-tile-high corridor and a solid packed-floor row.",
+		"Connect every room with a three-tile-high corridor and a solid packed-floor or plank row.",
+		"Fill passable room interiors with timber backwalls, hide patch accents, and packed-earth connector walls.",
 		"Spawn goblins from marker symbols only when the player approaches the village."
 	]
 }

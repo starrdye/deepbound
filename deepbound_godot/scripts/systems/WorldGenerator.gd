@@ -24,6 +24,36 @@ static func _is_starter_cave(tile: Vector2i) -> bool:
 	var shaft: bool = abs(tile.x) <= 2 and tile.y >= 7 and tile.y <= 28
 	return ellipse <= 1.0 or shaft
 
+static func surface_floor_y(seed: int, tile_x: int) -> int:
+	var broad_x := floori(float(tile_x) / 10.0)
+	var long_x := floori(float(tile_x) / 23.0)
+	var hill_noise := (noise01(seed + 3101, broad_x, 0) - 0.5) * 4.0
+	var root_noise := (noise01(seed + 3107, long_x, 0) - 0.5) * 2.0
+	var wave := sin(float(tile_x) * 0.11 + float(seed) * 0.003) * 1.5
+	return clampi(-4 + int(round(hill_noise + root_noise + wave)), -8, -2)
+
+static func _is_surface_entry(seed: int, tile: Vector2i) -> bool:
+	var floor_y := surface_floor_y(seed, tile.x)
+	return abs(tile.x) <= 2 and tile.y >= floor_y and tile.y < 0
+
+static func _generate_surface_tile_id(seed: int, tile: Vector2i) -> String:
+	if tile.y < BandCatalog.SURFACE_MIN_TILE_Y:
+		return "air"
+
+	var floor_y := surface_floor_y(seed, tile.x)
+	if tile.y < floor_y:
+		return "air"
+	if _is_surface_entry(seed, tile):
+		return "air"
+	if tile.y == floor_y:
+		return "surface_grass"
+
+	var local_noise := noise01(seed + 4401, tile.x, tile.y)
+	var depth := tile.y - floor_y
+	if depth <= 2:
+		return "surface_root_loam" if local_noise > 0.74 else "surface_loam"
+	return "surface_stone" if local_noise > 0.82 else "surface_root_loam"
+
 static func _is_main_tunnel(seed: int, tile: Vector2i) -> bool:
 	var drift: float = sin(float(tile.y) * 0.075 + float(seed) * 0.001) * 7.0 + sin(float(tile.y) * 0.021) * 12.0
 	var half_width: float = 2.7 + noise01(seed, 3, floori(float(tile.y) / 9.0)) * 2.4
@@ -41,7 +71,7 @@ static func _is_side_pocket(seed: int, tile: Vector2i) -> bool:
 
 static func generate_tile_id(seed: int, tile: Vector2i) -> String:
 	if tile.y < 0:
-		return "air"
+		return _generate_surface_tile_id(seed, tile)
 	if tile.y >= BandCatalog.SOLID_DARK_START_TILE_Y:
 		return "solid_dark_block"
 	if _is_starter_cave(tile):
@@ -79,20 +109,26 @@ static func generate_tile_id(seed: int, tile: Vector2i) -> String:
 			return "solid_dark_block"
 
 static func generate_chunk(seed: int, chunk: Vector2i) -> Array[String]:
-	if chunk.y < 0:
+	var max_y := chunk.y * CHUNK_SIZE + CHUNK_SIZE - 1
+	if max_y < BandCatalog.SURFACE_MIN_TILE_Y:
 		return _filled_chunk("air")
 	var tiles: Array[String] = []
 	for local_y in CHUNK_SIZE:
 		for local_x in CHUNK_SIZE:
 			var tile := Vector2i(chunk.x * CHUNK_SIZE + local_x, chunk.y * CHUNK_SIZE + local_y)
 			tiles.append(generate_tile_id(seed, tile))
-	if not _chunk_can_contain_band1_structure(chunk):
+	if not _chunk_can_contain_structure(chunk):
 		return tiles
 	return StructureGenerator.apply_structure_tiles(seed, chunk, tiles)
 
 static func generate_background_id(seed: int, tile: Vector2i) -> String:
-	if tile.y < 0 or tile.y >= BandCatalog.SOLID_DARK_START_TILE_Y:
+	if tile.y < BandCatalog.SURFACE_MIN_TILE_Y or tile.y >= BandCatalog.SOLID_DARK_START_TILE_Y:
 		return BackgroundCatalog.EMPTY_ID
+	if tile.y < 0:
+		var floor_y := surface_floor_y(seed, tile.x)
+		if tile.y < floor_y or _is_surface_entry(seed, tile):
+			return BackgroundCatalog.EMPTY_ID
+		return "surface_root_background"
 	var n := noise01(seed + 9091, tile.x, tile.y)
 	match BandCatalog.resolve_band_id(tile.y):
 		"standard_caverns":
@@ -111,13 +147,17 @@ static func generate_background_id(seed: int, tile: Vector2i) -> String:
 			return BackgroundCatalog.EMPTY_ID
 
 static func generate_background_chunk(seed: int, chunk: Vector2i) -> Array[String]:
-	if chunk.y < 0:
+	var max_y := chunk.y * CHUNK_SIZE + CHUNK_SIZE - 1
+	if max_y < BandCatalog.SURFACE_MIN_TILE_Y:
 		return _filled_chunk(BackgroundCatalog.EMPTY_ID)
 	var backgrounds: Array[String] = []
 	for local_y in CHUNK_SIZE:
 		for local_x in CHUNK_SIZE:
 			var tile := Vector2i(chunk.x * CHUNK_SIZE + local_x, chunk.y * CHUNK_SIZE + local_y)
 			backgrounds.append(generate_background_id(seed, tile))
+	if not _chunk_can_contain_structure(chunk):
+		return backgrounds
+	backgrounds = StructureGenerator.apply_structure_backgrounds(seed, chunk, backgrounds)
 	return backgrounds
 
 static func _filled_chunk(tile_id: String) -> Array[String]:
@@ -126,7 +166,7 @@ static func _filled_chunk(tile_id: String) -> Array[String]:
 	tiles.fill(tile_id)
 	return tiles
 
-static func _chunk_can_contain_band1_structure(chunk: Vector2i) -> bool:
+static func _chunk_can_contain_structure(chunk: Vector2i) -> bool:
 	var min_y := chunk.y * CHUNK_SIZE
 	var max_y := min_y + CHUNK_SIZE - 1
-	return max_y >= StructureGenerator.BAND1_MIN_Y and min_y <= StructureGenerator.BAND1_MAX_Y
+	return max_y >= BandCatalog.SURFACE_MIN_TILE_Y and min_y < BandCatalog.SOLID_DARK_START_TILE_Y

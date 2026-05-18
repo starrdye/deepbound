@@ -8,6 +8,9 @@ const ENEMIES := {
 	"goblin_shaman": {"name": "Goblin Shaman", "band": "standard_caverns", "health": 42, "damage": 13, "speed": 30.0, "aggro_tiles": 11, "color": Color8(97, 119, 52)},
 	"worker_ant": {"name": "Worker Ant", "band": "colossal_ant_chambers", "health": 34, "damage": 10, "speed": 42.0, "aggro_tiles": 9, "color": Color8(198, 134, 51)},
 	"soldier_ant": {"name": "Soldier Ant", "band": "colossal_ant_chambers", "health": 58, "damage": 16, "speed": 36.0, "aggro_tiles": 10, "color": Color8(143, 95, 34)},
+	"dwarf_guard": {"name": "Dwarf Guard", "band": "colossal_ant_chambers", "health": 62, "damage": 16, "speed": 31.0, "aggro_tiles": 9, "color": Color8(138, 111, 72)},
+	"dwarf_crossbowman": {"name": "Dwarf Crossbowman", "band": "colossal_ant_chambers", "health": 46, "damage": 14, "speed": 34.0, "aggro_tiles": 13, "color": Color8(118, 100, 82)},
+	"dwarf_smith": {"name": "Dwarf Smith", "band": "colossal_ant_chambers", "health": 70, "damage": 18, "speed": 27.0, "aggro_tiles": 9, "color": Color8(152, 93, 54)},
 	"mummy_sentry": {"name": "Mummy Sentry", "band": "buried_pyramids", "health": 72, "damage": 18, "speed": 25.0, "aggro_tiles": 7, "color": Color8(210, 179, 106)}
 }
 
@@ -18,6 +21,9 @@ const COLLIDERS := {
 	"goblin_shaman": {"width": 15.0, "height": 27.0},
 	"worker_ant": {"width": 18.0, "height": 10.0},
 	"soldier_ant": {"width": 22.0, "height": 12.0},
+	"dwarf_guard": {"width": 16.0, "height": 24.0},
+	"dwarf_crossbowman": {"width": 16.0, "height": 23.0},
+	"dwarf_smith": {"width": 18.0, "height": 25.0},
 	"mummy_sentry": {"width": 14.0, "height": 28.0},
 	"tunneling_worm_head": {"width": 26.0, "height": 18.0},
 	"tunneling_worm_segment": {"width": 12.0, "height": 12.0}

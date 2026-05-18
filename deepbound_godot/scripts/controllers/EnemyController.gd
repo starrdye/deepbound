@@ -22,6 +22,8 @@ var alive := true
 var anim_time := 0.0
 var last_player_distance := 1000000.0
 var hurt_until := 0.0
+var applied_draw_frame := -1
+var applied_draw_row := -1
 
 func setup(id: String, player_node, world_node) -> void:
 	enemy_id = id
@@ -29,7 +31,7 @@ func setup(id: String, player_node, world_node) -> void:
 	world = world_node
 	data = EnemyCatalog.get_enemy(enemy_id)
 	health = int(data.health)
-	queue_redraw()
+	_invalidate_draw_frame()
 
 func _physics_process(delta: float) -> void:
 	if not alive or player == null or world == null:
@@ -46,7 +48,7 @@ func _physics_process(delta: float) -> void:
 	velocity = collision.velocity
 	if last_player_distance < 18.0:
 		player.damage(int(data.damage), (player.global_position - global_position).normalized() * 150.0 + Vector2(0, -160))
-	queue_redraw()
+	_queue_redraw_if_animation_changed()
 
 func _collider() -> Dictionary:
 	return EnemyCatalog.get_collider(enemy_id)
@@ -58,6 +60,8 @@ func take_damage(amount: int) -> void:
 	if health <= 0:
 		alive = false
 		visible = false
+		return
+	_invalidate_draw_frame()
 
 func _draw() -> void:
 	if data.is_empty():
@@ -66,6 +70,8 @@ func _draw() -> void:
 	if texture != null:
 		var move_row := _animation_row()
 		var frame := int(floorf(anim_time * 10.0)) % SPRITE_FRAMES_PER_MOVE
+		applied_draw_frame = frame
+		applied_draw_row = move_row
 		draw_texture_rect_region(
 			texture,
 			Rect2(Vector2(-SPRITE_FRAME_SIZE.x / 2.0, -SPRITE_FRAME_SIZE.y), SPRITE_FRAME_SIZE),
@@ -87,3 +93,15 @@ func _animation_row() -> int:
 	if absf(velocity.x) > 2.0:
 		return 1
 	return 0
+
+func _queue_redraw_if_animation_changed() -> void:
+	var row := _animation_row()
+	var frame := int(floorf(anim_time * 10.0)) % SPRITE_FRAMES_PER_MOVE
+	if frame == applied_draw_frame and row == applied_draw_row:
+		return
+	queue_redraw()
+
+func _invalidate_draw_frame() -> void:
+	applied_draw_frame = -1
+	applied_draw_row = -1
+	queue_redraw()

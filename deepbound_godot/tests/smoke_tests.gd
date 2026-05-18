@@ -2,6 +2,7 @@ extends SceneTree
 
 const BandCatalog = preload("res://scripts/catalogs/BandCatalog.gd")
 const TileCatalog = preload("res://scripts/catalogs/TileCatalog.gd")
+const BackgroundCatalog = preload("res://scripts/catalogs/BackgroundCatalog.gd")
 const EconomyModel = preload("res://scripts/catalogs/EconomyModel.gd")
 const ChunkStore = preload("res://scripts/systems/ChunkStore.gd")
 const WorldGenerator = preload("res://scripts/systems/WorldGenerator.gd")
@@ -21,6 +22,7 @@ func _assert(condition: bool, message: String) -> void:
 func _run() -> void:
 	_test_bands()
 	_test_generation()
+	_test_surface_area_generation()
 	_test_sky_chunk_fast_path()
 	_test_mining_inventory()
 	_test_economy()
@@ -33,6 +35,7 @@ func _run() -> void:
 		quit(1)
 
 func _test_bands() -> void:
+	_assert(BandCatalog.resolve_band_id(-1) == "surface_area", "negative tileY should resolve to the surface area")
 	_assert(BandCatalog.resolve_band_id(0) == "standard_caverns", "tileY 0 should be Band 1")
 	_assert(BandCatalog.resolve_band_id(384) == "colossal_ant_chambers", "tileY 384 should be Band 2")
 	_assert(BandCatalog.resolve_band_id(768) == "buried_pyramids", "tileY 768 should be Band 3")
@@ -47,6 +50,13 @@ func _test_generation() -> void:
 	_assert(a == b, "generation should be deterministic for same seed/chunk")
 	_assert(a != c, "generation should vary by seed")
 	_assert(WorldGenerator.generate_tile_id(42, Vector2i(0, 1920)) == "solid_dark_block", "dark boundary should generate dark blocks")
+
+func _test_surface_area_generation() -> void:
+	var floor_y := WorldGenerator.surface_floor_y(42, 8)
+	_assert(WorldGenerator.generate_tile_id(42, Vector2i(8, floor_y)) == "surface_grass", "surface floor should generate grass at the terrain crown")
+	_assert(WorldGenerator.generate_tile_id(42, Vector2i(8, floor_y + 1)) in ["surface_loam", "surface_root_loam", "surface_stone"], "surface subsoil should generate native surface materials")
+	_assert(WorldGenerator.generate_tile_id(42, Vector2i(0, -2)) == "air", "surface entry should stay open above the starter shaft")
+	_assert(WorldGenerator.generate_background_id(42, Vector2i(0, -2)) == BackgroundCatalog.EMPTY_ID, "surface entry sky should not generate a background wall")
 
 func _test_sky_chunk_fast_path() -> void:
 	var sky := WorldGenerator.generate_chunk(42, Vector2i(0, -4))

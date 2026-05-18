@@ -10,8 +10,12 @@ static func trace_line_of_sight(store, origin: Vector2i, target: Vector2i) -> fl
 	if steps == 0:
 		return 1.0
 	var visibility := 1.0
+	var previous_tile := origin
 	for i in range(1, steps + 1):
 		var tile := Vector2i(roundi(float(origin.x) + float(delta.x) * float(i) / float(steps)), roundi(float(origin.y) + float(delta.y) * float(i) / float(steps)))
+		if tile == previous_tile:
+			continue
+		previous_tile = tile
 		var tile_def := TileCatalog.get_tile(store.get_tile(tile))
 		visibility -= float(tile_def.occlusion) * 0.36
 		if visibility <= 0.0:
@@ -22,8 +26,13 @@ static func sample_light(store, tile: Vector2i, sources: Array[Dictionary]) -> f
 	var intensity := float(BandCatalog.get_band(tile.y).ambient_light)
 	for source in sources:
 		var origin := Vector2i(floori(float(source.position.x) / 16.0), floori(float(source.position.y) / 16.0))
-		var distance := Vector2(origin).distance_to(Vector2(tile))
 		var radius := float(source.radius_tiles)
+		var delta := origin - tile
+		var distance_sq := float(delta.x * delta.x + delta.y * delta.y)
+		var radius_sq := radius * radius
+		if distance_sq > radius_sq:
+			continue
+		var distance := sqrt(distance_sq)
 		if distance > radius:
 			continue
 		var visibility := trace_line_of_sight(store, origin, tile)

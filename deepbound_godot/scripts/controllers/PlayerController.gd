@@ -4,6 +4,7 @@ class_name PlayerController
 const TextureFactory = preload("res://scripts/factories/TextureFactory.gd")
 const InventorySystem = preload("res://scripts/systems/InventorySystem.gd")
 const CollisionSystem = preload("res://scripts/systems/CollisionSystem.gd")
+const MiningSystem = preload("res://scripts/systems/MiningSystem.gd")
 const HeartSystem = preload("res://scripts/systems/HeartSystem.gd")
 
 const TILE_SIZE := 16
@@ -18,7 +19,11 @@ const MAX_SPEED := 94.0
 const JUMP_HEIGHT_TILES := 4.0
 const JUMP_VELOCITY := -510.0
 const AIRBORNE_FRAME_SMOOTHING := 18.0
+const TARGET_SCAN_INTERVAL_SECONDS := 0.05
+const TARGET_AIM_MIN_DELTA_RADIANS := 0.035
+const TARGET_ORIGIN_MIN_DELTA_PX := 4.0
 const WEAPON_SWING_SECONDS := 0.34
+const NO_TARGET_TILE := Vector2i(999999, 999999)
 const DRILL_SPEED_ITEM_IDS := {
 	"drill": true,
 	"starter_drill": true,
@@ -26,6 +31,7 @@ const DRILL_SPEED_ITEM_IDS := {
 	"crystal_drill": true,
 	"cursed_drill": true,
 }
+const HAMMER_ITEM_ID := "hammer"
 const WEAPON_READY_ITEM_IDS := {
 	"wooden_sword": true,
 	"crystal_sword": true,
@@ -49,14 +55,24 @@ var health := HeartSystem.DEFAULT_MAX_HP
 var max_health := HeartSystem.DEFAULT_MAX_HP
 var invulnerable_until := 0.0
 var drill_heat := 0.0
-var target_tile := Vector2i(999999, 999999)
+var target_tile := NO_TARGET_TILE
 var target_tile_id := "air"
 var target_layer := "foreground"
+var target_scan_elapsed := TARGET_SCAN_INTERVAL_SECONDS
+var target_scan_has_cache := false
+var target_scan_was_drilling := false
+var last_target_scan_origin := Vector2.ZERO
+var last_target_scan_aim := Vector2.RIGHT
+var last_target_scan_hammer_enabled := false
+var last_target_scan_world = null
 var last_mining_result := {}
 var animation_time := 0.0
 var animation_row := -1
 var airborne_animation_active := false
 var airborne_frame_float := 0.0
+var applied_sprite_frame := -1
+var applied_sprite_row := -1
+var applied_sprite_flip_h := false
 var facing := 1
 var drill_aim := Vector2.RIGHT
 var weapon_swing_started_at := -999.0
@@ -81,6 +97,9 @@ func _ready() -> void:
 	sprite.texture = TextureFactory.make_delver_sprite_sheet()
 	sprite.region_enabled = true
 	sprite.region_rect = Rect2(0, 0, SPRITE_FRAME_SIZE.x, SPRITE_FRAME_SIZE.y)
+	applied_sprite_frame = 0
+	applied_sprite_row = 0
+	applied_sprite_flip_h = sprite.flip_h
 	sprite.centered = true
 	sprite.position = Vector2(0, -SPRITE_FRAME_SIZE.y / 2.0)
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -148,26 +167,70 @@ func _update_mining(delta: float) -> void:
 	var aim := get_global_mouse_position() - origin
 	if aim.length_squared() > 0.001:
 		drill_aim = aim
+	target_scan_elapsed += delta
+	var hammer_enabled := _selected_item_is_hammer()
+	var drilling := _is_drill_active()
+	if _should_refresh_mining_target(origin, aim, hammer_enabled, drilling):
+		_refresh_mining_target(origin, aim, hammer_enabled)
+	if drilling:
+		var use_drill_speed_logic := _selected_item_modifies_drill_speed()
+		drill_heat = minf(1.0, drill_heat + 0.16 * delta) if use_drill_speed_logic else 0.0
+		if target_tile != NO_TARGET_TILE:
+			var effective_drill_heat := drill_heat if use_drill_speed_logic else 0.0
+			if world.has_method("find_mining_target_info"):
+				last_mining_result = world.mine_at(target_tile, inventory, delta, effective_drill_heat, target_layer, selected_hotbar_item_id)
+			else:
+				last_mining_result = world.mine_at(target_tile, inventory, delta, effective_drill_heat)
+			if bool(last_mining_result.get("broke", false)):
+				_invalidate_mining_target_cache()
+	else:
+		drill_heat = maxf(0.0, drill_heat - 0.34 * delta)
+	target_scan_was_drilling = drilling
+
+func _should_refresh_mining_target(origin: Vector2, aim: Vector2, hammer_enabled: bool, drilling: bool) -> bool:
+	if not target_scan_has_cache:
+		return true
+	if world != last_target_scan_world:
+		return true
+	if hammer_enabled != last_target_scan_hammer_enabled:
+		return true
+	if drilling and not target_scan_was_drilling:
+		return true
+	var origin_changed := origin.distance_squared_to(last_target_scan_origin) >= TARGET_ORIGIN_MIN_DELTA_PX * TARGET_ORIGIN_MIN_DELTA_PX
+	var aim_changed := _target_aim_changed_significantly(aim)
+	if target_scan_elapsed < TARGET_SCAN_INTERVAL_SECONDS:
+		return false
+	return origin_changed or aim_changed
+
+func _refresh_mining_target(origin: Vector2, aim: Vector2, hammer_enabled: bool) -> void:
 	if world.has_method("find_mining_target_info"):
-		var target_info: Dictionary = world.find_mining_target_info(origin, aim)
-		target_tile = target_info.tile
-		target_layer = String(target_info.layer)
-		target_tile_id = String(target_info.id)
+		var target_info: Dictionary = world.find_mining_target_info(origin, aim, float(MiningSystem.STARTER_DRILL.reach_tiles), hammer_enabled)
+		target_tile = target_info.get("tile", NO_TARGET_TILE)
+		target_layer = String(target_info.get("layer", "foreground"))
+		target_tile_id = String(target_info.get("id", "air"))
 	else:
 		target_tile = world.find_mining_target(origin, aim)
 		target_layer = "foreground"
-		target_tile_id = "air" if target_tile.x == 999999 else world.get_tile(target_tile)
-	if _is_drill_active():
-		var use_drill_speed_logic := _selected_item_modifies_drill_speed()
-		drill_heat = minf(1.0, drill_heat + 0.16 * delta) if use_drill_speed_logic else 0.0
-		if target_tile.x != 999999:
-			var effective_drill_heat := drill_heat if use_drill_speed_logic else 0.0
-			if world.has_method("find_mining_target_info"):
-				last_mining_result = world.mine_at(target_tile, inventory, delta, effective_drill_heat, target_layer)
-			else:
-				last_mining_result = world.mine_at(target_tile, inventory, delta, effective_drill_heat)
-	else:
-		drill_heat = maxf(0.0, drill_heat - 0.34 * delta)
+		target_tile_id = "air" if target_tile == NO_TARGET_TILE else world.get_tile(target_tile)
+	target_scan_elapsed = 0.0
+	target_scan_has_cache = true
+	last_target_scan_world = world
+	last_target_scan_origin = origin
+	last_target_scan_aim = _normalized_target_aim(aim)
+	last_target_scan_hammer_enabled = hammer_enabled
+
+func _invalidate_mining_target_cache() -> void:
+	target_scan_has_cache = false
+	target_scan_elapsed = TARGET_SCAN_INTERVAL_SECONDS
+
+func _target_aim_changed_significantly(aim: Vector2) -> bool:
+	var normal := _normalized_target_aim(aim)
+	return absf(last_target_scan_aim.angle_to(normal)) >= TARGET_AIM_MIN_DELTA_RADIANS
+
+func _normalized_target_aim(aim: Vector2) -> Vector2:
+	if aim.length_squared() <= 0.001:
+		return Vector2.RIGHT
+	return aim.normalized()
 
 func _update_animation(delta: float, input_axis: float) -> void:
 	var row := 0
@@ -226,10 +289,20 @@ func _update_animation(delta: float, input_axis: float) -> void:
 	var frame := fixed_frame
 	if frame < 0:
 		frame = int(floorf(animation_time * fps)) % frame_count
-	sprite.flip_h = facing < 0
-	sprite.region_rect = Rect2(frame * SPRITE_FRAME_SIZE.x, row * SPRITE_FRAME_SIZE.y, SPRITE_FRAME_SIZE.x, SPRITE_FRAME_SIZE.y)
+	_apply_player_sprite(frame, row)
 	_update_held_item_overlay(row, frame, drilling, weapon_swinging)
 	_update_weapon_overlay(weapon_swinging, frame)
+
+func _apply_player_sprite(frame: int, row: int) -> void:
+	var flip_h := facing < 0
+	if applied_sprite_flip_h != flip_h:
+		sprite.flip_h = flip_h
+		applied_sprite_flip_h = flip_h
+	if applied_sprite_frame == frame and applied_sprite_row == row:
+		return
+	sprite.region_rect = Rect2(frame * SPRITE_FRAME_SIZE.x, row * SPRITE_FRAME_SIZE.y, SPRITE_FRAME_SIZE.x, SPRITE_FRAME_SIZE.y)
+	applied_sprite_frame = frame
+	applied_sprite_row = row
 
 func _airborne_animation_frame(delta: float) -> int:
 	var target_frame := _airborne_target_frame()
@@ -246,29 +319,29 @@ func _airborne_target_frame() -> float:
 	return lerpf(1.0, 6.0, velocity_ratio)
 
 func _update_weapon_overlay(active: bool, frame: int) -> void:
-	for overlay in [weapon_sprite, weapon_hand_sprite]:
-		if overlay == null:
-			continue
-		overlay.visible = active and overlay.texture != null
-		if not overlay.visible:
-			continue
-		overlay.position = sprite.position
-		overlay.flip_h = sprite.flip_h
-		overlay.region_rect = Rect2(frame * SPRITE_FRAME_SIZE.x, 0, SPRITE_FRAME_SIZE.x, SPRITE_FRAME_SIZE.y)
+	_update_weapon_overlay_sprite(weapon_sprite, active, frame)
+	_update_weapon_overlay_sprite(weapon_hand_sprite, active, frame)
+
+func _update_weapon_overlay_sprite(overlay: Sprite2D, active: bool, frame: int) -> void:
+	var should_show := active and overlay != null and overlay.texture != null
+	_set_overlay_visible(overlay, should_show)
+	if not should_show:
+		return
+	_set_overlay_position(overlay, sprite.position)
+	_set_overlay_flip_h(overlay, sprite.flip_h)
+	_set_overlay_region(overlay, frame, 0)
 
 func _update_held_item_overlay(row: int, frame: int, drilling: bool, weapon_swinging: bool) -> void:
 	var overlay_row := _held_overlay_row(row)
 	var can_show := selected_hotbar_item_id != "" and not controls_locked and not drilling and not weapon_swinging and overlay_row >= 0
 	var weapon_ready_active := can_show and _selected_item_is_ready_weapon() and weapon_ready_texture != null
 	var held_item_active := can_show and not weapon_ready_active and held_item_texture != null
-	if held_item_sprite != null:
-		held_item_sprite.visible = held_item_active
-	if held_hand_sprite != null:
-		held_hand_sprite.visible = held_item_active and held_hand_sprite.texture != null
-	if weapon_ready_sprite != null:
-		weapon_ready_sprite.visible = weapon_ready_active
-	if weapon_ready_hand_sprite != null:
-		weapon_ready_hand_sprite.visible = weapon_ready_active and weapon_ready_hand_sprite.texture != null
+	var held_hand_active := held_item_active and held_hand_sprite != null and held_hand_sprite.texture != null
+	var weapon_ready_hand_active := weapon_ready_active and weapon_ready_hand_sprite != null and weapon_ready_hand_sprite.texture != null
+	_set_overlay_visible(held_item_sprite, held_item_active)
+	_set_overlay_visible(held_hand_sprite, held_hand_active)
+	_set_overlay_visible(weapon_ready_sprite, weapon_ready_active)
+	_set_overlay_visible(weapon_ready_hand_sprite, weapon_ready_hand_active)
 	if not held_item_active and not weapon_ready_active:
 		return
 
@@ -277,24 +350,55 @@ func _update_held_item_overlay(row: int, frame: int, drilling: bool, weapon_swin
 	if facing < 0:
 		offset.x = -offset.x
 	if held_item_active:
-		held_item_sprite.texture = held_item_texture
-		held_item_sprite.position = sprite.position + offset
-		held_item_sprite.flip_h = facing < 0
-		held_item_sprite.rotation_degrees = 0.0
-		held_item_sprite.scale = Vector2.ONE * _held_item_scale()
-	if held_item_active and held_hand_sprite != null:
-		held_hand_sprite.position = sprite.position
-		held_hand_sprite.flip_h = sprite.flip_h
-		held_hand_sprite.region_rect = Rect2(frame * SPRITE_FRAME_SIZE.x, overlay_row * SPRITE_FRAME_SIZE.y, SPRITE_FRAME_SIZE.x, SPRITE_FRAME_SIZE.y)
+		_set_overlay_texture(held_item_sprite, held_item_texture)
+		_set_overlay_position(held_item_sprite, sprite.position + offset)
+		_set_overlay_flip_h(held_item_sprite, facing < 0)
+		_set_overlay_rotation_degrees(held_item_sprite, 0.0)
+		_set_overlay_scale(held_item_sprite, Vector2.ONE * _held_item_scale())
+	if held_hand_active:
+		_set_overlay_position(held_hand_sprite, sprite.position)
+		_set_overlay_flip_h(held_hand_sprite, sprite.flip_h)
+		_set_overlay_region(held_hand_sprite, frame, overlay_row)
 	if weapon_ready_active and weapon_ready_sprite != null:
-		weapon_ready_sprite.texture = weapon_ready_texture
-		weapon_ready_sprite.position = sprite.position
-		weapon_ready_sprite.flip_h = sprite.flip_h
-		weapon_ready_sprite.region_rect = Rect2(frame * SPRITE_FRAME_SIZE.x, overlay_row * SPRITE_FRAME_SIZE.y, SPRITE_FRAME_SIZE.x, SPRITE_FRAME_SIZE.y)
-	if weapon_ready_active and weapon_ready_hand_sprite != null:
-		weapon_ready_hand_sprite.position = sprite.position
-		weapon_ready_hand_sprite.flip_h = sprite.flip_h
-		weapon_ready_hand_sprite.region_rect = Rect2(frame * SPRITE_FRAME_SIZE.x, overlay_row * SPRITE_FRAME_SIZE.y, SPRITE_FRAME_SIZE.x, SPRITE_FRAME_SIZE.y)
+		_set_overlay_texture(weapon_ready_sprite, weapon_ready_texture)
+		_set_overlay_position(weapon_ready_sprite, sprite.position)
+		_set_overlay_flip_h(weapon_ready_sprite, sprite.flip_h)
+		_set_overlay_region(weapon_ready_sprite, frame, overlay_row)
+	if weapon_ready_hand_active:
+		_set_overlay_position(weapon_ready_hand_sprite, sprite.position)
+		_set_overlay_flip_h(weapon_ready_hand_sprite, sprite.flip_h)
+		_set_overlay_region(weapon_ready_hand_sprite, frame, overlay_row)
+
+func _set_overlay_visible(overlay: Sprite2D, visible: bool) -> void:
+	if overlay != null and overlay.visible != visible:
+		overlay.visible = visible
+
+func _set_overlay_texture(overlay: Sprite2D, texture: Texture2D) -> void:
+	if overlay != null and overlay.texture != texture:
+		overlay.texture = texture
+
+func _set_overlay_position(overlay: Sprite2D, position: Vector2) -> void:
+	if overlay != null and overlay.position != position:
+		overlay.position = position
+
+func _set_overlay_flip_h(overlay: Sprite2D, flip_h: bool) -> void:
+	if overlay != null and overlay.flip_h != flip_h:
+		overlay.flip_h = flip_h
+
+func _set_overlay_region(overlay: Sprite2D, frame: int, row: int) -> void:
+	if overlay == null:
+		return
+	var region := Rect2(frame * SPRITE_FRAME_SIZE.x, row * SPRITE_FRAME_SIZE.y, SPRITE_FRAME_SIZE.x, SPRITE_FRAME_SIZE.y)
+	if overlay.region_rect != region:
+		overlay.region_rect = region
+
+func _set_overlay_scale(overlay: Sprite2D, scale: Vector2) -> void:
+	if overlay != null and overlay.scale != scale:
+		overlay.scale = scale
+
+func _set_overlay_rotation_degrees(overlay: Sprite2D, rotation_degrees: float) -> void:
+	if overlay != null and not is_equal_approx(overlay.rotation_degrees, rotation_degrees):
+		overlay.rotation_degrees = rotation_degrees
 
 func _held_overlay_row(row: int) -> int:
 	if bool(HELD_ITEM_HIDDEN_ROWS.get(row, false)):
@@ -305,6 +409,9 @@ func _held_overlay_row(row: int) -> int:
 
 func _selected_item_is_ready_weapon() -> bool:
 	return bool(WEAPON_READY_ITEM_IDS.get(selected_hotbar_item_id, false))
+
+func _selected_item_is_hammer() -> bool:
+	return selected_hotbar_item_id == HAMMER_ITEM_ID
 
 func _held_item_anchor(row: int, frame: int) -> Vector2:
 	var cycle := frame % SPRITE_FRAMES_PER_MOVE
@@ -350,6 +457,7 @@ func cancel_transient_input() -> void:
 	velocity.x = 0.0
 	animation_row = -1
 	animation_time = 0.0
+	_invalidate_mining_target_cache()
 	_update_weapon_overlay(false, 0)
 	if held_item_sprite != null:
 		held_item_sprite.visible = false
@@ -368,7 +476,10 @@ func set_controls_locked(locked: bool) -> void:
 		cancel_transient_input()
 
 func set_selected_hotbar_item(item_id: String) -> void:
+	if selected_hotbar_item_id == item_id:
+		return
 	selected_hotbar_item_id = item_id
+	_invalidate_mining_target_cache()
 	if not _selected_item_modifies_drill_speed():
 		drill_heat = 0.0
 	_refresh_held_item_overlay()
@@ -379,20 +490,20 @@ func _refresh_held_item_overlay() -> void:
 		equipped_weapon_id = selected_hotbar_item_id
 		weapon_ready_texture = TextureFactory.make_weapon_ready_texture(equipped_weapon_id)
 		if weapon_sprite != null:
-			weapon_sprite.texture = TextureFactory.make_weapon_swing_texture(equipped_weapon_id)
+			_set_overlay_texture(weapon_sprite, TextureFactory.make_weapon_swing_texture(equipped_weapon_id))
 	else:
 		weapon_ready_texture = null
 	held_item_texture = null if selected_hotbar_item_id == "" or ready_weapon else TextureFactory.make_held_item_texture(selected_hotbar_item_id)
 	if held_item_sprite != null:
-		held_item_sprite.texture = held_item_texture
-		held_item_sprite.visible = false
+		_set_overlay_texture(held_item_sprite, held_item_texture)
+		_set_overlay_visible(held_item_sprite, false)
 	if held_hand_sprite != null:
-		held_hand_sprite.visible = false
+		_set_overlay_visible(held_hand_sprite, false)
 	if weapon_ready_sprite != null:
-		weapon_ready_sprite.texture = weapon_ready_texture
-		weapon_ready_sprite.visible = false
+		_set_overlay_texture(weapon_ready_sprite, weapon_ready_texture)
+		_set_overlay_visible(weapon_ready_sprite, false)
 	if weapon_ready_hand_sprite != null:
-		weapon_ready_hand_sprite.visible = false
+		_set_overlay_visible(weapon_ready_hand_sprite, false)
 
 func start_weapon_swing(aim := Vector2.ZERO) -> void:
 	if controls_locked:

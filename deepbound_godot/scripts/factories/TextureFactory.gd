@@ -13,6 +13,7 @@ const CORE_ITEM_IDS := [
 	"stone_chunk",
 	"copper_nugget",
 	"wooden_sword",
+	"hammer",
 	"chest",
 	"dirt_background_block",
 	"stone_background_block",
@@ -35,8 +36,38 @@ const CORE_UI_IDS := [
 	"light",
 	"danger_pulse",
 ]
-const CORE_ENEMY_IDS := ["cave_skitter", "goblin_grunt", "goblin_slinger", "goblin_shaman", "worker_ant", "soldier_ant", "mummy_sentry"]
-const CORE_PROP_IDS := ["chest_open_sheet", "chest_closed", "chest_open", "flare", "outpost_beacon"]
+const CORE_ENEMY_IDS := ["cave_skitter", "goblin_grunt", "goblin_slinger", "goblin_shaman", "worker_ant", "soldier_ant", "dwarf_guard", "dwarf_crossbowman", "dwarf_smith", "mummy_sentry"]
+const CORE_PROP_IDS := [
+	"chest_open_sheet",
+	"chest_closed",
+	"chest_open",
+	"flare",
+	"outpost_beacon",
+	"goblin_rope_ladder",
+	"goblin_rope_bridge",
+	"goblin_scaffold_post",
+	"goblin_diagonal_brace",
+	"goblin_central_hut",
+	"goblin_back_hut_lit",
+	"goblin_back_hut_dark",
+	"goblin_work_shelf",
+	"goblin_wall_torch",
+	"dwarf_forge",
+	"dwarf_anvil",
+	"dwarf_lantern",
+	"dwarf_banner",
+	"dwarf_gate",
+	"dwarf_barrel",
+	"dwarf_ladder",
+	"dwarf_chain_lift",
+	"dwarf_bridge",
+	"dwarf_chest",
+	"dwarf_armor_rack",
+	"dwarf_back_tower_lit",
+	"dwarf_back_tower_dark",
+	"dwarf_ore_cart",
+	"dwarf_rune_marker"
+]
 
 static var cache: Dictionary = {}
 
@@ -98,6 +129,8 @@ static func warm_runtime_cache() -> void:
 		make_enemy_texture(enemy_id)
 	for prop_id in CORE_PROP_IDS:
 		make_prop_texture(prop_id)
+	for surface_id in ["tree_backdrop", "rocks_backdrop"]:
+		make_surface_texture(surface_id)
 
 static func make_tile_texture(tile_id: String, tile_def: Dictionary) -> Texture2D:
 	var key := "tile:%s" % tile_id
@@ -248,6 +281,9 @@ static func make_ui_texture(icon_id: String) -> Texture2D:
 
 static func make_prop_texture(prop_id: String) -> Texture2D:
 	return _load_project_texture("res://assets/props/%s.png" % prop_id, "prop:%s" % prop_id)
+
+static func make_surface_texture(asset_id: String) -> Texture2D:
+	return _load_project_texture("res://assets/surface/%s.png" % asset_id, "surface:%s" % asset_id)
 
 static func make_effect_texture(effect_id: String) -> Texture2D:
 	return _load_project_texture("res://assets/effects/%s.png" % effect_id, "effect:%s" % effect_id)

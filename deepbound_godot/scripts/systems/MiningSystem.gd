@@ -6,10 +6,11 @@ const BackgroundCatalog = preload("res://scripts/catalogs/BackgroundCatalog.gd")
 
 const STARTER_DRILL := {
 	"power": 1.0,
-	"reach_tiles": 1.45,
+	"reach_tiles": 4.35,
 	"heat_per_second": 0.16,
 	"cool_per_second": 0.34
 }
+const HAMMER_ITEM_ID := "hammer"
 const BREAK_STAGE_COUNT := 5
 
 static func damage_stage(progress_ratio: float) -> int:
@@ -40,11 +41,13 @@ func mine_tile(store, tile: Vector2i, inventory, delta: float, drill_heat := 0.0
 		drops.append({"item": String(drop.item), "count": count - remaining})
 	return {"layer": "foreground", "target": tile, "tile": tile_id, "broke": true, "progress": 1.0, "stage": BREAK_STAGE_COUNT, "drops": drops}
 
-func mine_background(store, tile: Vector2i, inventory, delta: float, drill_heat := 0.0) -> Dictionary:
+func mine_background(store, tile: Vector2i, inventory, delta: float, drill_heat := 0.0, tool_item_id := "") -> Dictionary:
 	var background_id: String = store.get_background_tile(tile)
 	var background_def: Dictionary = BackgroundCatalog.get_background(background_id)
 	if BackgroundCatalog.is_empty(background_id):
 		return {"layer": "background", "target": tile, "tile": background_id, "broke": false, "progress": 0.0, "stage": 0, "drops": [], "blocked": "empty"}
+	if tool_item_id != HAMMER_ITEM_ID:
+		return {"layer": "background", "target": tile, "tile": background_id, "broke": false, "progress": 0.0, "stage": 0, "drops": [], "blocked": "missing_hammer"}
 	if not bool(background_def.breakable):
 		return {"layer": "background", "target": tile, "tile": background_id, "broke": false, "progress": 0.0, "stage": 0, "drops": [], "blocked": "unbreakable"}
 

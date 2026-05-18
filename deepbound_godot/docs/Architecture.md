@@ -6,6 +6,8 @@
 - `scripts/Main.gd` configures input, spawns Band encounters, updates HUD state, owns drop spawning, and coordinates right-click chest use and selected-hotbar placement.
 - `scripts/World.gd` owns `ChunkStore`, tile drawing, mining calls, beacons, flares, and autotile-style edge rendering.
 - `scripts/systems/CollisionSystem.gd` owns bottom-center AABB tile collision for all moving entities.
+- `scripts/systems/PrefabTemplateRegistry.gd` loads built-in and user templates, validates JSON, caches deterministic structure instances, and answers chunk/nearby light/spawn/container queries.
+- `scripts/controllers/PrefabDesignerController.gd` powers the standalone `scenes/PrefabDesigner.tscn` utility for drawing and saving reusable prefab templates.
 - `scripts/controllers/PlayerController.gd` owns Delver intent, villager-style sprite animation, drilling, health, heat, inventory, and calls the shared collision solver.
 - `scripts/controllers/EnemyController.gd` is the shared enemy base for skitters, ants, and mummies and uses entity-specific collider dimensions.
 - `scripts/controllers/ChestController.gd` owns chest inventory, anchor tile metadata, the eight-frame open animation, and open/close state.
@@ -22,10 +24,26 @@
 - `InventorySystem.gd` stores slot arrays, stack caps, matching-stack merges, overflow, swaps, quick slots, and capacity checks.
 - `HeartSystem.gd` maps HP to full, half, and empty heart states.
 - `SpawnSystem.gd` finds clear enemy spawn points so monsters do not appear embedded in blocks.
+- `data/templates/*.json` stores built-in sparse prefab templates. `goblin_village_full.json` is the imported Band 1 village, and `dwarf_fortress_full.json` is the Band 2 fortress settlement.
 
 ## Procedural Generation
 
 Generation is deterministic from seed and tile coordinate. Horizontal generation is unbounded. Vertical generation resolves through five mapped Bands and clamps to Solid Dark Blocks at `tileY >= 1920`.
+
+Structure generation is template-backed for active settlements. `StructureGenerator.gd` delegates chunk overlap and nearby marker lookups to `PrefabTemplateRegistry.gd`, which scans deterministic spawn regions, applies allowed mirror/rotation metadata, checks band bounds and starter avoidance, and returns structure dictionaries with `tiles`, `backgrounds`, `props`, `spawns`, `lights`, and `containers`.
+
+Built-in templates currently include:
+
+- `goblin_village_full`: Band 1 `standard_caverns`, imported from the legacy deterministic goblin village generator.
+- `dwarf_fortress_full`: Band 2 `colossal_ant_chambers`, a granite/iron fortress with forge rooms, ladders, bridge decks, storage, lanterns, and dwarf spawn markers.
+
+The old live goblin village builder remains available for importer/reference tests. Runtime chunk generation uses template overlays so settlement output is stable regardless of chunk generation order.
+
+## Prefab Designer
+
+`scenes/PrefabDesigner.tscn` is a standalone utility scene. It builds its palette from `TileCatalog`, `BackgroundCatalog`, `EnemyCatalog`, and `assets/props/*.png`, supports foreground/background/prop/spawn layers, and saves sparse JSON through `PrefabTemplateRegistry.save_template`.
+
+Template cells are sparse: blank cells mean "do not stamp", explicit `air` foreground entries carve terrain, and explicit `empty` background entries clear walls. Template props can expose light and container markers based on prop kind/id; multi-tile container props stamp their runtime `chest_block` marker on the bottom-left occupied cell.
 
 ## Inventory And Containers
 
@@ -55,9 +73,11 @@ The hotbar is six extra slots on `InventorySystem.gd`, separate from the player'
 
 ## Animation Performance
 
-`TextureFactory.warm_runtime_cache()` preloads the core player, tile, item, enemy, prop, UI, and break-overlay textures once during `Main.gd` startup. Missing texture lookups are cached as misses, so fallback rendering does not keep probing the filesystem during `_draw()`.
+`TextureFactory.warm_runtime_cache()` preloads the core player, tile, item, enemy, prop, UI, and break-overlay textures once during `Main.gd` startup. Missing texture lookups are cached as misses, so fallback rendering does not keep probing the filesystem during draw passes.
 
-`World.gd` redraws terrain when the camera enters a new tile, terrain changes, mining damage advances, or flares expire. The visible tile radius is calculated from the active camera zoom plus a small tile margin instead of drawing a fixed oversized rectangle every frame.
+`World.gd` uses cached foreground/background chunk render nodes instead of one monolithic terrain draw. Camera movement refreshes the visible chunk window and only creates or redraws chunks when chunk coordinates change; tile/background mutation and mining damage invalidate only the touched chunk plus neighbor chunks when edge rendering depends on them. Static structure props draw through cached prop overlays, while beacons, flares, mining overlays, and placement previews live on lightweight dynamic overlay nodes.
+
+`PrefabTemplateRegistry.gd` caches template region instantiation results, chunk overlap results, and near-query results for spawns, lights, and containers. The movement performance tests exercise short jumps, long falls, placement previews, and template-heavy falls to keep camera movement from reintroducing full-world redraw or repeated template-instantiation spikes.
 
 `HudController.gd` skips redraws when the derived HUD signature is unchanged, and static dropped items rely on transform updates rather than queuing a custom redraw every process tick.
 

@@ -15,12 +15,16 @@ ITEM_DIR = ROOT / "assets" / "items"
 PROP_DIR = ROOT / "assets" / "props"
 EFFECT_DIR = ROOT / "assets" / "effects"
 PREVIEW_DIR = ROOT / "assets" / "previews"
+SOURCE_AI_DIR = ROOT / "assets" / "source_ai"
 AI_REFERENCE = ROOT / "assets" / "source_ai" / "villager_delver_ai_reference.png"
 AI_PLAYER_REFERENCE_V2 = ROOT / "assets" / "source_ai" / "delver_main_character_v2_ai_reference.png"
 AI_ENEMY_REFERENCE = ROOT / "assets" / "source_ai" / "enemy_roster_ai_reference.png"
 AI_WORLD_REFERENCE = ROOT / "assets" / "source_ai" / "world_asset_ai_reference.png"
 AI_DROW_TILE_REFERENCE = ROOT / "assets" / "source_ai" / "drow_village_tiles_ai_reference.png"
 AI_GOBLIN_VILLAGE_REFERENCE = ROOT / "assets" / "source_ai" / "goblin_village_ai_reference.png"
+AI_GOBLIN_BACKGROUND_REFERENCE = ROOT / "assets" / "source_ai" / "goblin_village_backgrounds_ai_reference.png"
+AI_GOBLIN_EXPANSION_REFERENCE = ROOT / "assets" / "source_ai" / "goblin_village_expansion_ai_reference.png"
+AI_DWARF_FORTRESS_REFERENCE = ROOT / "assets" / "source_ai" / "dwarf_fortress_ai_reference.png"
 AI_HEART_CHEST_REFERENCE = ROOT / "assets" / "source_ai" / "chest_heart_ai_reference.png"
 AI_WEAPON_REFERENCE = ROOT / "assets" / "source_ai" / "weapon_modular_ai_reference.png"
 AI_HELD_ITEM_REFERENCE = ROOT / "assets" / "source_ai" / "held_item_pose_ai_reference.png"
@@ -47,6 +51,13 @@ BREAK_MATERIALS = {
     "goblin_timber_wall": {"shadow": (48, 32, 26, 220), "mid": (118, 74, 38, 225), "hi": (206, 132, 64, 235), "chip": (246, 190, 116, 240)},
     "goblin_packed_floor": {"shadow": (58, 43, 32, 220), "mid": (130, 92, 55, 225), "hi": (196, 148, 86, 235), "chip": (232, 182, 112, 240)},
     "goblin_hide_canopy": {"shadow": (42, 48, 32, 220), "mid": (98, 101, 53, 225), "hi": (157, 151, 75, 235), "chip": (210, 190, 105, 240)},
+    "goblin_mossy_brick": {"shadow": (24, 29, 27, 225), "mid": (73, 82, 68, 225), "hi": (127, 151, 80, 235), "chip": (180, 198, 111, 240)},
+    "goblin_plank_platform": {"shadow": (48, 32, 26, 220), "mid": (132, 82, 43, 225), "hi": (206, 132, 64, 235), "chip": (246, 190, 116, 240)},
+    "dwarf_granite_brick": {"shadow": (38, 42, 45, 225), "mid": (114, 119, 119, 225), "hi": (184, 190, 184, 235), "chip": (226, 218, 173, 240)},
+    "dwarf_cut_granite_floor": {"shadow": (43, 44, 41, 225), "mid": (122, 119, 101, 225), "hi": (212, 188, 112, 235), "chip": (247, 224, 154, 240)},
+    "dwarf_ironbound_block": {"shadow": (32, 37, 41, 225), "mid": (91, 98, 100, 225), "hi": (216, 170, 83, 235), "chip": (255, 214, 107, 240)},
+    "dwarf_rune_block": {"shadow": (35, 33, 45, 225), "mid": (96, 82, 76, 225), "hi": (255, 191, 82, 235), "chip": (255, 232, 146, 240)},
+    "dwarf_iron_platform": {"shadow": (36, 36, 35, 225), "mid": (112, 105, 84, 225), "hi": (216, 170, 83, 235), "chip": (255, 214, 107, 240)},
     "glow_mushroom_loam": {"shadow": (24, 30, 72, 220), "mid": (45, 63, 130, 225), "hi": (85, 214, 210, 235), "chip": (182, 255, 236, 245)},
     "drow_basalt_brick": {"shadow": (18, 20, 45, 225), "mid": (72, 65, 138, 225), "hi": (133, 112, 184, 235), "chip": (85, 214, 210, 240)},
     "drow_carved_floor": {"shadow": (23, 28, 61, 225), "mid": (66, 82, 138, 225), "hi": (112, 206, 177, 235), "chip": (182, 255, 236, 240)},
@@ -82,6 +93,14 @@ GOBLIN_VILLAGE_TILE_IDS = [
     "goblin_timber_wall",
     "goblin_packed_floor",
     "goblin_hide_canopy",
+    "goblin_mossy_brick",
+    "goblin_plank_platform",
+]
+
+GOBLIN_VILLAGE_BACKGROUND_IDS = [
+    "goblin_timber_background",
+    "goblin_hide_background",
+    "goblin_packed_earth_background",
 ]
 
 GOBLIN_VILLAGE_PROP_IDS = [
@@ -92,6 +111,47 @@ GOBLIN_VILLAGE_PROP_IDS = [
     "goblin_banner",
     "goblin_door_flap",
     "goblin_palisade_post",
+    "goblin_rope_ladder",
+    "goblin_rope_bridge",
+    "goblin_scaffold_post",
+    "goblin_diagonal_brace",
+    "goblin_central_hut",
+    "goblin_back_hut_lit",
+    "goblin_back_hut_dark",
+    "goblin_work_shelf",
+    "goblin_wall_torch",
+]
+
+DWARF_FORTRESS_TILE_IDS = [
+    "dwarf_granite_brick",
+    "dwarf_cut_granite_floor",
+    "dwarf_ironbound_block",
+    "dwarf_rune_block",
+    "dwarf_iron_platform",
+]
+
+DWARF_FORTRESS_BACKGROUND_IDS = [
+    "dwarf_granite_background",
+    "dwarf_forge_background",
+    "dwarf_rune_background",
+]
+
+DWARF_FORTRESS_PROP_IDS = [
+    "dwarf_forge",
+    "dwarf_anvil",
+    "dwarf_lantern",
+    "dwarf_banner",
+    "dwarf_gate",
+    "dwarf_barrel",
+    "dwarf_ladder",
+    "dwarf_chain_lift",
+    "dwarf_bridge",
+    "dwarf_chest",
+    "dwarf_armor_rack",
+    "dwarf_back_tower_lit",
+    "dwarf_back_tower_dark",
+    "dwarf_ore_cart",
+    "dwarf_rune_marker",
 ]
 
 PALETTE = {
@@ -120,7 +180,7 @@ PALETTE = {
 
 
 def ensure_dirs() -> None:
-    for path in (SPRITE_DIR, TILE_DIR, BACKGROUND_DIR, UI_DIR, ENEMY_DIR, ITEM_DIR, PROP_DIR, EFFECT_DIR, PREVIEW_DIR):
+    for path in (SPRITE_DIR, TILE_DIR, BACKGROUND_DIR, UI_DIR, ENEMY_DIR, ITEM_DIR, PROP_DIR, EFFECT_DIR, PREVIEW_DIR, SOURCE_AI_DIR):
         path.mkdir(parents=True, exist_ok=True)
 
 
@@ -1014,12 +1074,43 @@ def make_goblin_tile(tile_id: str) -> Image.Image:
         d.line((13, 2, 2, 13), fill=(54, 60, 37, 255), width=1)
         px(img, 6, 4, (190, 174, 94, 255))
         px(img, 11, 9, (190, 174, 94, 255))
+    elif tile_id == "goblin_mossy_brick":
+        img.paste((48, 54, 48, 255), (0, 0, 16, 16))
+        rect(d, 0, 12, 16, 4, (24, 29, 27, 255))
+        for y in (3, 7, 11):
+            d.line((0, y, 15, y - (1 if y == 7 else 0)), fill=(25, 29, 29, 255), width=1)
+        for x in (4, 10):
+            d.line((x, 1, x, 12), fill=(30, 36, 34, 255), width=1)
+        d.line((2, 1, 13, 1), fill=(91, 112, 68, 255), width=1)
+        for point in [(3, 2), (8, 2), (12, 5), (5, 10)]:
+            px(img, point[0], point[1], (127, 151, 80, 255))
+    elif tile_id == "goblin_plank_platform":
+        img.paste((94, 58, 35, 255), (0, 0, 16, 16))
+        rect(d, 0, 10, 16, 6, (48, 32, 26, 255))
+        for y in (3, 7, 11):
+            d.line((1, y, 14, y), fill=(50, 34, 28, 255), width=1)
+        for x in (4, 9, 13):
+            d.line((x, 1, x, 15), fill=(132, 82, 43, 255), width=1)
+        d.line((1, 4, 14, 3), fill=(170, 106, 53, 255), width=1)
+        px(img, 6, 2, (224, 153, 82, 255))
+        px(img, 11, 9, (224, 153, 82, 255))
     img.save(TILE_DIR / f"{tile_id}.png")
     return img
 
 
 def make_goblin_prop(prop_id: str) -> Image.Image:
-    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    prop_sizes = {
+        "goblin_rope_ladder": (16, 48),
+        "goblin_rope_bridge": (48, 16),
+        "goblin_scaffold_post": (16, 48),
+        "goblin_diagonal_brace": (32, 32),
+        "goblin_central_hut": (64, 48),
+        "goblin_back_hut_lit": (48, 32),
+        "goblin_back_hut_dark": (48, 32),
+        "goblin_work_shelf": (48, 32),
+        "goblin_wall_torch": (16, 32),
+    }
+    img = Image.new("RGBA", prop_sizes.get(prop_id, (16, 16)), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     outline = (32, 22, 22, 255)
     wood = (111, 68, 37, 255)
@@ -1062,21 +1153,436 @@ def make_goblin_prop(prop_id: str) -> Image.Image:
         d.polygon([(8, 1), (12, 6), (10, 15), (6, 15), (4, 6)], fill=outline)
         d.polygon([(8, 2), (11, 6), (9, 14), (7, 14), (5, 6)], fill=wood)
         d.line((8, 3, 8, 14), fill=wood_hi, width=1)
+    elif prop_id == "goblin_rope_ladder":
+        for y in range(3, 45, 8):
+            d.line((4, y, 12, y), fill=wood_hi, width=1)
+            d.line((4, y + 1, 12, y + 1), fill=(57, 39, 30, 255), width=1)
+        d.line((3, 1, 3, 46), fill=(88, 72, 39, 255), width=2)
+        d.line((12, 1, 12, 46), fill=(88, 72, 39, 255), width=2)
+    elif prop_id == "goblin_rope_bridge":
+        d.line((2, 5, 45, 5), fill=(132, 82, 43, 255), width=2)
+        d.line((2, 10, 45, 10), fill=(55, 36, 28, 255), width=2)
+        for x in range(3, 47, 8):
+            d.line((x, 4, x + 4, 12), fill=(111, 93, 46, 255), width=1)
+    elif prop_id == "goblin_scaffold_post":
+        rect(d, 5, 1, 6, 46, outline)
+        rect(d, 6, 2, 4, 44, wood)
+        for y in (8, 22, 36):
+            d.line((3, y, 13, y), fill=(184, 117, 55, 255), width=2)
+            d.line((2, y + 2, 14, y + 2), fill=(54, 39, 31, 255), width=1)
+    elif prop_id == "goblin_diagonal_brace":
+        d.line((4, 27, 27, 4), fill=outline, width=5)
+        d.line((5, 26, 26, 5), fill=wood, width=3)
+        d.line((6, 24, 23, 7), fill=wood_hi, width=1)
+    elif prop_id == "goblin_central_hut":
+        d.polygon([(6, 21), (32, 3), (58, 21)], fill=outline)
+        d.polygon([(9, 21), (32, 6), (55, 21)], fill=(89, 78, 43, 255))
+        rect(d, 10, 21, 44, 22, outline)
+        rect(d, 12, 22, 40, 20, (79, 55, 34, 255))
+        rect(d, 25, 27, 13, 16, (42, 31, 27, 255))
+        rect(d, 43, 27, 6, 6, (255, 190, 82, 255))
+        d.line((9, 39, 55, 39), fill=wood_hi, width=2)
+    elif prop_id in ["goblin_back_hut_lit", "goblin_back_hut_dark"]:
+        alpha = 190 if prop_id == "goblin_back_hut_lit" else 155
+        d.polygon([(5, 16), (24, 4), (43, 16)], fill=(23, 21, 21, alpha))
+        d.polygon([(8, 16), (24, 7), (40, 16)], fill=(74, 58, 39, alpha))
+        rect(d, 9, 16, 30, 14, (39, 32, 28, alpha))
+        rect(d, 20, 20, 8, 10, (12, 12, 13, alpha))
+        if prop_id == "goblin_back_hut_lit":
+            rect(d, 31, 19, 4, 4, (232, 176, 72, 205))
+    elif prop_id == "goblin_work_shelf":
+        rect(d, 2, 7, 44, 4, outline)
+        rect(d, 3, 8, 42, 2, wood)
+        rect(d, 5, 20, 38, 4, outline)
+        rect(d, 6, 21, 36, 2, wood)
+        for x in (6, 22, 39):
+            rect(d, x, 10, 3, 18, outline)
+            rect(d, x + 1, 11, 1, 16, wood)
+        rect(d, 9, 14, 8, 5, (60, 84, 47, 255))
+        rect(d, 28, 13, 9, 6, (126, 73, 35, 255))
+        px(img, 13, 13, (145, 190, 86, 255))
+    elif prop_id == "goblin_wall_torch":
+        rect(d, 6, 12, 4, 18, outline)
+        rect(d, 7, 13, 2, 16, wood)
+        d.polygon([(8, 2), (13, 10), (8, 16), (3, 10)], fill=(147, 50, 27, 255))
+        d.polygon([(8, 4), (11, 10), (8, 14), (5, 10)], fill=(255, 151, 43, 255))
+        px(img, 8, 7, (255, 224, 121, 255))
     img.save(PROP_DIR / f"{prop_id}.png")
     return img
 
 
+def make_goblin_background(background_id: str) -> Image.Image:
+    palettes = {
+        "goblin_timber_background": {
+            "base": (69, 45, 31, 218),
+            "shadow": (38, 27, 24, 230),
+            "hi": (146, 91, 45, 224),
+        },
+        "goblin_hide_background": {
+            "base": (63, 56, 37, 206),
+            "shadow": (35, 38, 28, 224),
+            "hi": (139, 126, 69, 220),
+        },
+        "goblin_packed_earth_background": {
+            "base": (63, 44, 35, 216),
+            "shadow": (34, 27, 25, 228),
+            "hi": (130, 86, 50, 218),
+        },
+    }
+    palette = palettes[background_id]
+    img = Image.new("RGBA", (16, 16), palette["base"])
+    d = ImageDraw.Draw(img)
+    shadow = palette["shadow"]
+    hi = palette["hi"]
+    if background_id == "goblin_timber_background":
+        for x in (2, 7, 12):
+            d.line((x, 1, x, 15), fill=shadow, width=1)
+        d.line((0, 5, 15, 4), fill=hi, width=1)
+        d.line((1, 11, 15, 12), fill=shadow, width=1)
+        for point in [(4, 3), (10, 8), (14, 14)]:
+            px(img, point[0], point[1], (182, 115, 55, 218))
+    elif background_id == "goblin_hide_background":
+        d.line((1, 3, 14, 5), fill=hi, width=1)
+        d.line((3, 1, 4, 14), fill=shadow, width=1)
+        d.line((10, 2, 12, 15), fill=shadow, width=1)
+        d.line((2, 11, 14, 9), fill=(92, 82, 49, 220), width=1)
+        for point in [(6, 6), (8, 6), (6, 12), (8, 12)]:
+            px(img, point[0], point[1], (188, 166, 88, 220))
+    else:
+        d.line((1, 6, 13, 5), fill=shadow, width=1)
+        d.line((4, 11, 15, 12), fill=shadow, width=1)
+        d.line((0, 2, 6, 1), fill=(91, 60, 39, 220), width=1)
+        for point in [(3, 4), (9, 8), (12, 13), (6, 14)]:
+            px(img, point[0], point[1], hi)
+    img.save(BACKGROUND_DIR / f"{background_id}.png")
+    return img
+
+
+def make_goblin_background_assets() -> list[Image.Image]:
+    if AI_GOBLIN_BACKGROUND_REFERENCE.exists():
+        src = Image.open(AI_GOBLIN_BACKGROUND_REFERENCE).convert("RGBA")
+        centers = {
+            "goblin_timber_background": (232, 630),
+            "goblin_hide_background": (627, 630),
+            "goblin_packed_earth_background": (1030, 630),
+        }
+        backgrounds: list[Image.Image] = []
+        for background_id in GOBLIN_VILLAGE_BACKGROUND_IDS:
+            background = _crop_pixelized_opaque(src, centers[background_id], (330, 330), (16, 16), 18)
+            background.save(BACKGROUND_DIR / f"{background_id}.png")
+            backgrounds.append(background)
+        return backgrounds
+    return [make_goblin_background(background_id) for background_id in GOBLIN_VILLAGE_BACKGROUND_IDS]
+
+
 def make_goblin_village_assets() -> None:
-    # The source board sets the style, but these tiny kit pieces need crisp manual cleanup at 16x16.
+    # The source boards set the style; procedural cleanup is only a fallback when a board is missing.
     tiles = [make_goblin_tile(tile_id) for tile_id in GOBLIN_VILLAGE_TILE_IDS]
-    props = [make_goblin_prop(prop_id) for prop_id in GOBLIN_VILLAGE_PROP_IDS]
-    atlas = Image.new("RGBA", (16 * 6, 16 * 2), (0, 0, 0, 0))
-    for index, tile in enumerate(tiles):
-        atlas.alpha_composite(tile, ((index % 6) * 16, (index // 6) * 16))
-    for index, prop in enumerate(props):
-        atlas.alpha_composite(prop, (((index + len(tiles)) % 6) * 16, ((index + len(tiles)) // 6) * 16))
+    backgrounds = make_goblin_background_assets()
+    props: list[Image.Image] = []
+    if AI_GOBLIN_EXPANSION_REFERENCE.exists():
+        src = Image.open(AI_GOBLIN_EXPANSION_REFERENCE).convert("RGBA")
+        prop_specs = {
+            "goblin_rope_ladder": ((178, 506), (190, 310), (16, 48), 22),
+            "goblin_rope_bridge": ((896, 512), (410, 170), (48, 16), 24),
+            "goblin_scaffold_post": ((553, 506), (170, 310), (16, 48), 24),
+            "goblin_diagonal_brace": ((1298, 508), (320, 230), (32, 32), 24),
+            "goblin_central_hut": ((270, 840), (520, 345), (64, 48), 30),
+            "goblin_back_hut_lit": ((651, 840), (330, 250), (48, 32), 28),
+            "goblin_back_hut_dark": ((944, 842), (330, 250), (48, 32), 28),
+            "goblin_work_shelf": ((1230, 842), (330, 250), (48, 32), 28),
+            "goblin_wall_torch": ((1435, 838), (140, 245), (16, 32), 24),
+        }
+        for prop_id in GOBLIN_VILLAGE_PROP_IDS:
+            if prop_id in prop_specs:
+                center, crop_size, out_size, colors = prop_specs[prop_id]
+                prop = _crop_pixelized(src, center, crop_size, out_size, colors)
+                prop.save(PROP_DIR / f"{prop_id}.png")
+            else:
+                prop = make_goblin_prop(prop_id)
+            props.append(prop)
+    else:
+        props = [make_goblin_prop(prop_id) for prop_id in GOBLIN_VILLAGE_PROP_IDS]
+    kit = tiles + backgrounds + props
+    columns = 8
+    rows = max(1, (len(kit) + columns - 1) // columns)
+    atlas = Image.new("RGBA", (16 * columns, 16 * rows), (0, 0, 0, 0))
+    for index, asset in enumerate(kit):
+        preview_cell = asset.resize((16, 16), Image.Resampling.NEAREST)
+        atlas.alpha_composite(preview_cell, ((index % columns) * 16, (index // columns) * 16))
     atlas.save(PREVIEW_DIR / "goblin_village_kit.png")
     make_preview(atlas, PREVIEW_DIR / "goblin_village_kit_preview.png", scale=8, grid=(16, 16))
+
+
+def make_dwarf_tile(tile_id: str) -> Image.Image:
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    if tile_id == "dwarf_granite_brick":
+        img.paste((72, 76, 78, 255), (0, 0, 16, 16))
+        rect(d, 0, 12, 16, 4, (38, 42, 45, 255))
+        for y in (4, 8, 12):
+            d.line((0, y, 15, y), fill=(42, 47, 50, 255), width=1)
+        for x, y0, y1 in [(5, 0, 4), (11, 4, 8), (3, 8, 12), (9, 12, 16)]:
+            d.line((x, y0, x, y1), fill=(43, 48, 50, 255), width=1)
+        px(img, 2, 2, (158, 164, 160, 255))
+        px(img, 12, 6, (136, 141, 137, 255))
+    elif tile_id == "dwarf_cut_granite_floor":
+        img.paste((86, 86, 80, 255), (0, 0, 16, 16))
+        rect(d, 0, 12, 16, 4, (43, 44, 41, 255))
+        for x in (2, 7, 12):
+            d.line((x, 2, x, 14), fill=(50, 52, 50, 255), width=1)
+        d.line((1, 5, 14, 5), fill=(190, 178, 122, 255), width=1)
+        d.line((1, 10, 14, 10), fill=(55, 55, 50, 255), width=1)
+        px(img, 5, 4, (231, 205, 130, 255))
+    elif tile_id == "dwarf_ironbound_block":
+        img.paste((55, 61, 65, 255), (0, 0, 16, 16))
+        rect(d, 0, 12, 16, 4, (28, 34, 38, 255))
+        rect(d, 1, 1, 14, 2, (91, 98, 100, 255))
+        rect(d, 1, 12, 14, 2, (30, 35, 38, 255))
+        d.line((4, 0, 4, 15), fill=(33, 39, 43, 255), width=1)
+        d.line((11, 0, 11, 15), fill=(33, 39, 43, 255), width=1)
+        rect(d, 6, 5, 4, 4, (126, 91, 47, 255))
+        px(img, 7, 6, (205, 174, 92, 255))
+    elif tile_id == "dwarf_rune_block":
+        img.paste((68, 62, 72, 255), (0, 0, 16, 16))
+        rect(d, 0, 12, 16, 4, (35, 33, 45, 255))
+        d.line((2, 4, 13, 4), fill=(93, 88, 96, 255), width=1)
+        d.line((2, 11, 13, 11), fill=(39, 36, 47, 255), width=1)
+        d.line((8, 3, 8, 12), fill=(255, 191, 82, 255), width=1)
+        d.line((5, 6, 8, 3, 11, 6), fill=(255, 214, 107, 255), width=1)
+        px(img, 8, 9, (255, 238, 154, 255))
+    elif tile_id == "dwarf_iron_platform":
+        img.paste((0, 0, 0, 0), (0, 0, 16, 16))
+        rect(d, 0, 7, 16, 5, (38, 39, 38, 255))
+        rect(d, 0, 8, 16, 2, (72, 70, 64, 255))
+        for x in (2, 7, 12):
+            rect(d, x, 5, 2, 8, (36, 36, 35, 255))
+            px(img, x, 6, (216, 170, 83, 255))
+        d.line((1, 7, 14, 7), fill=(216, 170, 83, 255), width=1)
+    img.save(TILE_DIR / f"{tile_id}.png")
+    return img
+
+
+def make_dwarf_background(background_id: str) -> Image.Image:
+    palettes = {
+        "dwarf_granite_background": {
+            "base": (48, 52, 54, 222),
+            "shadow": (28, 31, 34, 230),
+            "hi": (130, 137, 133, 222),
+        },
+        "dwarf_forge_background": {
+            "base": (72, 45, 35, 222),
+            "shadow": (36, 28, 26, 232),
+            "hi": (230, 143, 63, 224),
+        },
+        "dwarf_rune_background": {
+            "base": (45, 48, 57, 222),
+            "shadow": (25, 28, 35, 232),
+            "hi": (255, 214, 107, 224),
+        },
+    }
+    palette = palettes[background_id]
+    img = Image.new("RGBA", (16, 16), palette["base"])
+    d = ImageDraw.Draw(img)
+    shadow = palette["shadow"]
+    hi = palette["hi"]
+    if background_id == "dwarf_forge_background":
+        for y in (4, 9, 14):
+            d.line((0, y, 15, y), fill=shadow, width=1)
+        d.line((3, 2, 6, 13), fill=(115, 58, 37, 220), width=1)
+        d.line((10, 1, 13, 15), fill=(41, 33, 31, 230), width=1)
+        px(img, 6, 8, hi)
+        px(img, 11, 12, (255, 190, 82, 230))
+    elif background_id == "dwarf_rune_background":
+        for y in (5, 11):
+            d.line((0, y, 15, y), fill=shadow, width=1)
+        d.line((8, 3, 8, 12), fill=hi, width=1)
+        d.line((5, 7, 11, 7), fill=(190, 150, 82, 210), width=1)
+        px(img, 8, 5, (255, 238, 154, 230))
+    else:
+        d.line((0, 5, 7, 5, 7, 0), fill=shadow, width=1)
+        d.line((8, 10, 15, 10), fill=shadow, width=1)
+        d.line((4, 5, 4, 15), fill=(130, 137, 133, 132), width=1)
+        px(img, 3, 3, hi)
+        px(img, 12, 8, (96, 104, 102, 220))
+    img.save(BACKGROUND_DIR / f"{background_id}.png")
+    return img
+
+
+def make_dwarf_prop(prop_id: str) -> Image.Image:
+    prop_sizes = {
+        "dwarf_forge": (48, 32),
+        "dwarf_banner": (16, 32),
+        "dwarf_gate": (32, 48),
+        "dwarf_ladder": (16, 48),
+        "dwarf_chain_lift": (16, 48),
+        "dwarf_bridge": (48, 16),
+        "dwarf_chest": (32, 32),
+        "dwarf_armor_rack": (16, 32),
+        "dwarf_back_tower_lit": (64, 48),
+        "dwarf_back_tower_dark": (64, 48),
+        "dwarf_ore_cart": (32, 16),
+    }
+    img = Image.new("RGBA", prop_sizes.get(prop_id, (16, 16)), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    outline = (24, 22, 24, 255)
+    iron = (75, 82, 84, 255)
+    iron_hi = (164, 170, 166, 255)
+    brass = (216, 170, 83, 255)
+    stone = (91, 94, 90, 255)
+    ember = (255, 138, 31, 255)
+    glow = (255, 214, 107, 255)
+    if prop_id == "dwarf_forge":
+        rect(d, 5, 12, 38, 17, outline)
+        rect(d, 7, 14, 34, 13, stone)
+        rect(d, 16, 5, 16, 11, outline)
+        rect(d, 18, 7, 12, 9, (55, 51, 48, 255))
+        d.polygon([(24, 8), (30, 17), (24, 24), (18, 17)], fill=(146, 48, 27, 255))
+        d.polygon([(24, 10), (28, 17), (24, 22), (20, 17)], fill=ember)
+        px(img, 24, 14, (255, 238, 154, 255))
+        rect(d, 2, 24, 44, 4, (41, 39, 37, 255))
+        for x in (10, 36):
+            rect(d, x, 9, 4, 20, iron)
+            px(img, x + 1, 10, brass)
+    elif prop_id == "dwarf_anvil":
+        rect(d, 2, 9, 12, 4, outline)
+        rect(d, 4, 7, 8, 4, iron)
+        rect(d, 5, 6, 6, 2, iron_hi)
+        rect(d, 6, 12, 4, 3, outline)
+        px(img, 11, 8, brass)
+    elif prop_id == "dwarf_lantern":
+        rect(d, 7, 1, 2, 4, outline)
+        rect(d, 4, 5, 8, 8, outline)
+        rect(d, 5, 6, 6, 6, (78, 54, 38, 255))
+        rect(d, 6, 7, 4, 4, ember)
+        px(img, 7, 8, (255, 238, 154, 255))
+    elif prop_id == "dwarf_banner":
+        rect(d, 3, 1, 2, 30, outline)
+        rect(d, 5, 3, 8, 21, (118, 49, 43, 235))
+        d.polygon([(5, 24), (9, 30), (13, 24)], fill=(72, 33, 32, 235))
+        d.line((7, 6, 11, 14, 7, 19), fill=brass, width=1)
+    elif prop_id == "dwarf_gate":
+        rect(d, 3, 4, 26, 42, outline)
+        for x in (6, 12, 18, 24):
+            rect(d, x, 6, 3, 38, iron)
+            px(img, x + 1, 8, iron_hi)
+        for y in (14, 28):
+            rect(d, 5, y, 22, 3, brass)
+        rect(d, 14, 31, 4, 6, (35, 31, 29, 255))
+    elif prop_id == "dwarf_barrel":
+        rect(d, 3, 5, 10, 9, outline)
+        rect(d, 4, 5, 8, 9, (117, 73, 41, 255))
+        d.line((4, 8, 12, 8), fill=(62, 44, 33, 255), width=1)
+        d.line((5, 5, 5, 14), fill=brass, width=1)
+        d.line((11, 5, 11, 14), fill=brass, width=1)
+    elif prop_id == "dwarf_ladder":
+        for y in range(4, 45, 7):
+            d.line((4, y, 12, y), fill=brass, width=2)
+            d.line((4, y + 2, 12, y + 2), fill=(38, 36, 34, 255), width=1)
+        d.line((3, 1, 3, 46), fill=iron, width=2)
+        d.line((12, 1, 12, 46), fill=iron, width=2)
+    elif prop_id == "dwarf_chain_lift":
+        d.line((8, 0, 8, 46), fill=outline, width=2)
+        for y in range(3, 42, 6):
+            rect(d, 5, y, 6, 3, iron)
+            px(img, 7, y + 1, iron_hi)
+        rect(d, 2, 38, 12, 8, outline)
+        rect(d, 3, 39, 10, 6, (71, 57, 43, 255))
+    elif prop_id == "dwarf_bridge":
+        rect(d, 1, 6, 46, 5, outline)
+        rect(d, 2, 7, 44, 3, iron)
+        for x in range(4, 47, 8):
+            d.line((x, 4, x + 4, 12), fill=brass, width=1)
+        d.line((2, 5, 45, 5), fill=iron_hi, width=1)
+    elif prop_id == "dwarf_chest":
+        rect(d, 3, 13, 26, 14, outline)
+        rect(d, 5, 10, 22, 8, (118, 73, 41, 255))
+        rect(d, 4, 12, 24, 3, brass)
+        rect(d, 14, 16, 4, 5, (55, 61, 65, 255))
+        px(img, 16, 17, glow)
+    elif prop_id == "dwarf_armor_rack":
+        rect(d, 7, 3, 2, 27, outline)
+        rect(d, 4, 6, 8, 12, iron)
+        rect(d, 5, 7, 6, 3, iron_hi)
+        rect(d, 5, 18, 6, 3, brass)
+        d.line((2, 29, 14, 29), fill=outline, width=2)
+    elif prop_id in ["dwarf_back_tower_lit", "dwarf_back_tower_dark"]:
+        alpha = 184 if prop_id == "dwarf_back_tower_lit" else 142
+        rect(d, 8, 14, 48, 31, (20, 21, 22, alpha))
+        rect(d, 12, 16, 40, 27, (52, 56, 58, alpha))
+        d.polygon([(6, 15), (32, 3), (58, 15)], fill=(25, 23, 24, alpha))
+        d.polygon([(10, 15), (32, 6), (54, 15)], fill=(78, 76, 68, alpha))
+        for x in (18, 42):
+            rect(d, x, 23, 7, 8, (10, 11, 13, alpha))
+        if prop_id == "dwarf_back_tower_lit":
+            rect(d, 20, 24, 3, 4, (255, 190, 82, 205))
+            rect(d, 44, 24, 3, 4, (255, 190, 82, 205))
+    elif prop_id == "dwarf_ore_cart":
+        rect(d, 2, 6, 26, 7, outline)
+        d.polygon([(4, 6), (26, 6), (23, 13), (7, 13)], fill=(78, 70, 57, 255))
+        for x in (8, 22):
+            d.ellipse((x - 3, 11, x + 3, 17), fill=outline)
+            d.ellipse((x - 1, 13, x + 1, 15), fill=iron_hi)
+        for point in [(10, 4), (15, 3), (19, 5)]:
+            px(img, point[0], point[1], (205, 174, 92, 255))
+    elif prop_id == "dwarf_rune_marker":
+        rect(d, 4, 2, 8, 13, outline)
+        rect(d, 5, 3, 6, 11, (68, 62, 72, 255))
+        d.line((8, 4, 8, 12), fill=glow, width=1)
+        d.line((6, 7, 10, 7), fill=(255, 191, 82, 255), width=1)
+        px(img, 8, 5, (255, 238, 154, 255))
+    img.save(PROP_DIR / f"{prop_id}.png")
+    return img
+
+
+def make_dwarf_reference_board(tiles: list[Image.Image], backgrounds: list[Image.Image], props: list[Image.Image]) -> None:
+    board = Image.new("RGBA", (1024, 768), (19, 18, 20, 255))
+    d = ImageDraw.Draw(board)
+    d.rectangle((0, 0, 1023, 96), fill=(38, 33, 29, 255))
+    d.text((32, 26), "Dwarf Fortress source board: granite halls, iron braces, forge light, vertical lifts", fill=(242, 213, 154, 255))
+    for index, tile in enumerate(tiles):
+        board.alpha_composite(tile.resize((96, 96), Image.Resampling.NEAREST), (40 + index * 112, 128))
+    for index, background in enumerate(backgrounds):
+        board.alpha_composite(background.resize((96, 96), Image.Resampling.NEAREST), (40 + index * 112, 264))
+    for index, prop in enumerate(props[:8]):
+        preview = prop.resize((prop.width * 3, prop.height * 3), Image.Resampling.NEAREST)
+        board.alpha_composite(preview, (40 + index * 116, 400))
+    for index, prop in enumerate(props[8:]):
+        preview = prop.resize((prop.width * 2, prop.height * 2), Image.Resampling.NEAREST)
+        board.alpha_composite(preview, (40 + index * 126, 590))
+
+    # Compact fortress read: two towers, central shaft, forge basement, and bridge decks.
+    origin = (700, 128)
+    brick = tiles[0]
+    floor = tiles[1]
+    rune = tiles[3]
+    bg = backgrounds[0]
+    for y in range(0, 20):
+        for x in range(0, 17):
+            if x in (0, 16) or y in (0, 19) or (x in (7, 8, 9) and y > 1):
+                board.alpha_composite(brick.resize((16, 16), Image.Resampling.NEAREST), (origin[0] + x * 16, origin[1] + y * 16))
+            elif y in (6, 12):
+                board.alpha_composite(floor.resize((16, 16), Image.Resampling.NEAREST), (origin[0] + x * 16, origin[1] + y * 16))
+            else:
+                board.alpha_composite(bg.resize((16, 16), Image.Resampling.NEAREST), (origin[0] + x * 16, origin[1] + y * 16))
+    for point in [(1, 1), (15, 1), (1, 18), (15, 18)]:
+        board.alpha_composite(rune.resize((16, 16), Image.Resampling.NEAREST), (origin[0] + point[0] * 16, origin[1] + point[1] * 16))
+    board.save(AI_DWARF_FORTRESS_REFERENCE)
+
+
+def make_dwarf_fortress_assets() -> None:
+    tiles = [make_dwarf_tile(tile_id) for tile_id in DWARF_FORTRESS_TILE_IDS]
+    backgrounds = [make_dwarf_background(background_id) for background_id in DWARF_FORTRESS_BACKGROUND_IDS]
+    props = [make_dwarf_prop(prop_id) for prop_id in DWARF_FORTRESS_PROP_IDS]
+    kit = tiles + backgrounds + [prop.resize((16, 16), Image.Resampling.NEAREST) for prop in props]
+    columns = 8
+    rows = max(1, (len(kit) + columns - 1) // columns)
+    atlas = Image.new("RGBA", (16 * columns, 16 * rows), (0, 0, 0, 0))
+    for index, asset in enumerate(kit):
+        atlas.alpha_composite(asset, ((index % columns) * 16, (index // columns) * 16))
+    atlas.save(PREVIEW_DIR / "dwarf_fortress_kit.png")
+    make_preview(atlas, PREVIEW_DIR / "dwarf_fortress_kit_preview.png", scale=8, grid=(16, 16))
+    make_dwarf_reference_board(tiles, backgrounds, props)
 
 
 def make_item_icon(name: str, color: tuple[int, int, int], highlight: tuple[int, int, int], shape: str = "chunk") -> Image.Image:
@@ -1396,6 +1902,43 @@ def _draw_enemy_cell(
         rect(d, ox + 15 + lunge - recoil, y - 9, 10, 7, (90, 53, 31, 255))
         rect(d, ox + 24 + lunge - recoil, y - 7, 6, 2 + frame % 2, (*highlight, 255))
         px(sheet, ox + 25 + lunge - recoil, y - 8, (255, 225, 130, 255))
+    elif kind.startswith("dwarf"):
+        x = ox + 9 + lunge - recoil
+        y = oy + 6 + bob
+        beard = (146, 84, 48, 255) if kind != "dwarf_smith" else (205, 96, 50, 255)
+        metal = (89, 96, 98, 255)
+        metal_hi = (188, 196, 190, 255)
+        leather = (78, 58, 44, 255)
+        # Compact silhouette: broad helmet, beard wedge, short legs, and readable tool/weapon.
+        rect(d, x + 1, y + 1, 11, 8, outline)
+        rect(d, x + 2, y + 2, 9, 5, metal)
+        rect(d, x + 4, y, 5, 3, metal_hi)
+        px(sheet, x + 9, y + 5, (*highlight, 255))
+        rect(d, x + 3, y + 7, 7, 5, beard)
+        d.polygon([(x + 3, y + 11), (x + 10, y + 11), (x + 7, y + 16)], fill=beard)
+        rect(d, x + 1, y + 14, 12, 9, outline)
+        rect(d, x + 2, y + 15, 10, 7, (*base, 255))
+        rect(d, x + 4, y + 17, 6, 2, metal_hi)
+        rect(d, x + 3, y + 23, 4, 4, outline)
+        rect(d, x + 8, y + 23, 4, 4, outline)
+        rect(d, x + 2, y + 27, 5, 2, leather)
+        rect(d, x + 8, y + 27, 5, 2, leather)
+        if kind == "dwarf_guard":
+            rect(d, x - 2, y + 14, 5, 10, outline)
+            rect(d, x - 1, y + 15, 3, 8, metal)
+            d.line((x + 13, y + 12, x + 20, y + 21), fill=outline, width=3)
+            d.line((x + 13, y + 12, x + 20, y + 21), fill=metal_hi, width=1)
+            rect(d, x + 19, y + 19, 4, 4, (*highlight, 255))
+        elif kind == "dwarf_crossbow":
+            rect(d, x + 12, y + 15, 11, 3, outline)
+            rect(d, x + 13, y + 16, 9, 1, (116, 75, 43, 255))
+            d.line((x + 17, y + 12, x + 22, y + 20), fill=metal_hi, width=1)
+            d.line((x + 17, y + 20, x + 22, y + 12), fill=metal_hi, width=1)
+        else:
+            d.line((x + 13, y + 11, x + 20, y + 18), fill=outline, width=3)
+            d.line((x + 13, y + 11, x + 20, y + 18), fill=(92, 67, 43, 255), width=1)
+            rect(d, x + 18, y + 17, 5, 3, metal_hi)
+            px(sheet, x + 21, y + 16, (255, 214, 107, 255))
     elif kind == "worm_head":
         y = oy + 23 + bob
         rect(d, ox + 3 + lunge - recoil, y - 13, 24, 13, outline)
@@ -1468,6 +2011,14 @@ def make_goblin_enemy_assets() -> list[Image.Image]:
     ]
 
 
+def make_dwarf_enemy_assets() -> list[Image.Image]:
+    return [
+        make_enemy_sheet("dwarf_guard", (138, 111, 72), (216, 170, 83), "dwarf_guard"),
+        make_enemy_sheet("dwarf_crossbowman", (118, 100, 82), (205, 174, 92), "dwarf_crossbow"),
+        make_enemy_sheet("dwarf_smith", (152, 93, 54), (255, 138, 31), "dwarf_smith"),
+    ]
+
+
 def make_enemies() -> None:
     specs = [
         ("cave_skitter", (139, 70, 80), (232, 213, 161), "skitter"),
@@ -1511,6 +2062,7 @@ def make_enemies() -> None:
             sheet.save(ENEMY_DIR / f"{enemy_id}.png")
             sheets.append(sheet)
         sheets.extend(make_goblin_enemy_assets())
+        sheets.extend(make_dwarf_enemy_assets())
         atlas = Image.new("RGBA", (FRAME_W * ENEMY_COLS, FRAME_H * ENEMY_ROWS * len(sheets)), (0, 0, 0, 0))
         for index, sheet in enumerate(sheets):
             atlas.alpha_composite(sheet, (0, index * FRAME_H * ENEMY_ROWS))
@@ -1522,6 +2074,7 @@ def make_enemies() -> None:
     for spec in specs:
         sheets.append(make_enemy_sheet(*spec))
     sheets.extend(make_goblin_enemy_assets())
+    sheets.extend(make_dwarf_enemy_assets())
     atlas = Image.new("RGBA", (FRAME_W * ENEMY_COLS, FRAME_H * ENEMY_ROWS * len(sheets)), (0, 0, 0, 0))
     for index, sheet in enumerate(sheets):
         atlas.alpha_composite(sheet, (0, index * FRAME_H * ENEMY_ROWS))
@@ -1902,6 +2455,7 @@ def make_tiles() -> None:
         make_preview(atlas, PREVIEW_DIR / "deepbound_tile_samples_preview.png", scale=8, grid=(16, 16))
         make_drow_village_assets()
         make_goblin_village_assets()
+        make_dwarf_fortress_assets()
         return
 
     make_tile("loose_dirt", (122, 75, 46), (168, 111, 60), (95, 61, 43))
@@ -1937,6 +2491,7 @@ def make_tiles() -> None:
     make_preview(atlas, PREVIEW_DIR / "deepbound_tile_samples_preview.png", scale=8, grid=(16, 16))
     make_drow_village_assets()
     make_goblin_village_assets()
+    make_dwarf_fortress_assets()
 
 
 def main() -> None:

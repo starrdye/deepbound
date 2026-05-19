@@ -53,6 +53,37 @@ func reset_debug_counters() -> void:
 	generated_chunk_count = 0
 	generated_background_chunk_count = 0
 
+func has_generated_chunk(chunk: Vector2i) -> bool:
+	return chunks.has(chunk)
+
+func has_generated_background_chunk(chunk: Vector2i) -> bool:
+	return background_chunks.has(chunk)
+
+func get_generated_chunk_coords(include_background := true) -> Array[Vector2i]:
+	var seen := {}
+	for raw_chunk in chunks.keys():
+		seen[_chunk_key(_data_to_chunk(raw_chunk))] = _data_to_chunk(raw_chunk)
+	if include_background:
+		for raw_chunk in background_chunks.keys():
+			seen[_chunk_key(_data_to_chunk(raw_chunk))] = _data_to_chunk(raw_chunk)
+	var coords: Array[Vector2i] = []
+	for key in seen.keys():
+		coords.append(seen[key])
+	coords.sort_custom(func(a: Vector2i, b: Vector2i): return a.y < b.y if a.x == b.x else a.x < b.x)
+	return coords
+
+func export_generated_chunks() -> Dictionary:
+	return _chunk_dictionary_to_data(chunks)
+
+func export_generated_background_chunks() -> Dictionary:
+	return _chunk_dictionary_to_data(background_chunks)
+
+func import_generated_chunks(data: Dictionary) -> void:
+	chunks = _chunk_dictionary_from_data(data)
+
+func import_generated_background_chunks(data: Dictionary) -> void:
+	background_chunks = _chunk_dictionary_from_data(data)
+
 func get_tile(tile: Vector2i) -> String:
 	if overrides.has(tile):
 		return String(overrides[tile])
@@ -95,3 +126,58 @@ func clear_background_damage(tile: Vector2i) -> void:
 
 func is_solid(tile: Vector2i) -> bool:
 	return TileCatalog.is_solid(get_tile(tile))
+
+static func _chunk_dictionary_to_data(source: Dictionary) -> Dictionary:
+	var result := {}
+	var coords: Array[Vector2i] = []
+	for raw_chunk in source.keys():
+		coords.append(_data_to_chunk(raw_chunk))
+	coords.sort_custom(func(a: Vector2i, b: Vector2i): return a.y < b.y if a.x == b.x else a.x < b.x)
+	for chunk in coords:
+		var tiles := _normalized_chunk_tiles(source.get(chunk, []))
+		if tiles.size() == CHUNK_SIZE * CHUNK_SIZE:
+			result[_chunk_key(chunk)] = tiles
+	return result
+
+static func _chunk_dictionary_from_data(data: Dictionary) -> Dictionary:
+	var result := {}
+	var keys := data.keys()
+	keys.sort()
+	for raw_key in keys:
+		var chunk := _chunk_from_key(String(raw_key))
+		var tiles := _normalized_chunk_tiles(data.get(raw_key, []))
+		if tiles.size() == CHUNK_SIZE * CHUNK_SIZE:
+			result[chunk] = tiles
+	return result
+
+static func _normalized_chunk_tiles(data) -> Array[String]:
+	var tiles: Array[String] = []
+	if not (data is Array):
+		return tiles
+	var source: Array = data
+	if source.size() != CHUNK_SIZE * CHUNK_SIZE:
+		return tiles
+	for tile_id in source:
+		tiles.append(String(tile_id))
+	return tiles
+
+static func _chunk_key(chunk: Vector2i) -> String:
+	return "%d,%d" % [chunk.x, chunk.y]
+
+static func _chunk_from_key(key: String) -> Vector2i:
+	var parts := key.split(",", false)
+	if parts.size() < 2:
+		return Vector2i.ZERO
+	return Vector2i(int(parts[0]), int(parts[1]))
+
+static func _data_to_chunk(data) -> Vector2i:
+	if data is Vector2i:
+		return data
+	if data is Vector2:
+		return Vector2i(int(data.x), int(data.y))
+	if data is Dictionary:
+		var dict := Dictionary(data)
+		return Vector2i(int(dict.get("x", 0)), int(dict.get("y", 0)))
+	if data is String:
+		return _chunk_from_key(String(data))
+	return Vector2i.ZERO

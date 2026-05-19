@@ -40,6 +40,9 @@ static func _rand_range(seed: int, region_coord: Vector2i, salt: int, min_value:
 static func get_structures_overlapping_chunk(seed: int, chunk: Vector2i) -> Array[Dictionary]:
 	return PrefabTemplateRegistry.get_structures_overlapping_chunk(seed, chunk)
 
+static func has_enabled_template_near_rect(rect: Rect2i) -> bool:
+	return PrefabTemplateRegistry.has_enabled_template_near_rect(rect)
+
 static func build_goblin_village(seed: int, region_coord: Vector2i) -> Dictionary:
 	if not _is_goblin_region_eligible(seed, region_coord):
 		return {}

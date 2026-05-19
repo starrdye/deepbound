@@ -8,6 +8,9 @@ const ChunkStore = preload("res://scripts/systems/ChunkStore.gd")
 const WorldGenerator = preload("res://scripts/systems/WorldGenerator.gd")
 const InventorySystem = preload("res://scripts/systems/InventorySystem.gd")
 const MiningSystem = preload("res://scripts/systems/MiningSystem.gd")
+const MainMenuController = preload("res://scripts/controllers/MainMenuController.gd")
+const MainController = preload("res://scripts/Main.gd")
+const PrefabDesignerController = preload("res://scripts/controllers/PrefabDesignerController.gd")
 
 var failures: Array[String] = []
 
@@ -27,6 +30,7 @@ func _run() -> void:
 	_test_mining_inventory()
 	_test_economy()
 	_test_sprint_4_5_hooks()
+	await _test_scene_instantiation()
 	if failures.is_empty():
 		print("Deepbound Godot smoke tests passed.")
 		quit(0)
@@ -108,3 +112,29 @@ func _test_sprint_4_5_hooks() -> void:
 	_assert(jelly_seen, "Sprint 4 should generate royal jelly hooks")
 	_assert(band3_seen, "Sprint 5 should generate Band 3 sandstone")
 	_assert(treasure_seen, "Sprint 5 should generate cursed treasure hooks")
+
+func _test_scene_instantiation() -> void:
+	var menu_scene: PackedScene = load("res://scenes/MainMenu.tscn")
+	var menu = menu_scene.instantiate()
+	get_root().add_child(menu)
+	await process_frame
+	_assert(menu is MainMenuController, "MainMenu scene should instantiate headlessly")
+	menu.queue_free()
+	await process_frame
+
+	var main_scene: PackedScene = load("res://scenes/Main.tscn")
+	var main = main_scene.instantiate()
+	get_root().add_child(main)
+	await process_frame
+	await process_frame
+	_assert(main is MainController, "Main scene should instantiate headlessly")
+	main.queue_free()
+	await process_frame
+
+	var designer_scene: PackedScene = load("res://scenes/PrefabDesigner.tscn")
+	var designer = designer_scene.instantiate()
+	get_root().add_child(designer)
+	await process_frame
+	_assert(designer is PrefabDesignerController, "PrefabDesigner scene should instantiate headlessly")
+	designer.queue_free()
+	await process_frame

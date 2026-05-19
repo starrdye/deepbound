@@ -168,6 +168,9 @@ var debug_perf_counters: Dictionary = {}
 var chunk_warm_queue: Array[Vector2i] = []
 var queued_chunk_warmups: Dictionary = {}
 var last_chunk_warm_center_tile := Vector2i(999999, 999999)
+var frozen_structures_by_id: Dictionary = {}
+var frozen_structure_chunk_index: Dictionary = {}
+var frozen_chunk_keys: Dictionary = {}
 
 func _ready() -> void:
 	player = get_node_or_null(player_path)
@@ -191,6 +194,118 @@ func _process(delta: float) -> void:
 		_queue_dynamic_overlay_redraw()
 	refresh_visible_chunk_window()
 	_process_chunk_warm_queue(CHUNK_WARM_PER_FRAME)
+
+func reset_for_loaded_state(world_seed: int) -> void:
+	store = ChunkStore.new(world_seed)
+	mining = MiningSystem.new()
+	container_blocks.clear()
+	beacons.clear()
+	flares.clear()
+	_clear_frozen_world_state()
+	clear_placement_preview()
+	_clear_runtime_render_state()
+
+func refresh_after_loaded_state() -> void:
+	_clear_solid_tile_cache()
+	structure_light_cache.clear()
+	structure_light_cache_center = Vector2i(999999, 999999)
+	last_redraw_center_tile = Vector2i(999999, 999999)
+	refresh_visible_chunk_window(true)
+	_queue_dynamic_overlay_redraw()
+	_queue_prop_overlay_redraw()
+	_queue_world_redraw("load")
+
+func set_frozen_world_state(structures: Array, chunks: Array[Vector2i]) -> void:
+	frozen_chunk_keys.clear()
+	for chunk in chunks:
+		frozen_chunk_keys[_structure_chunk_key(chunk)] = true
+	_set_frozen_structures(structures)
+
+func snapshot_structures_for_generated_chunks() -> Array[Dictionary]:
+	var seen := {}
+	var structures: Array[Dictionary] = []
+	for chunk in store.get_generated_chunk_coords(true):
+		for structure in get_structures_overlapping_chunk(chunk):
+			var structure_id := String(structure.get("id", ""))
+			if structure_id == "" or seen.has(structure_id):
+				continue
+			seen[structure_id] = true
+			structures.append(structure)
+	structures.sort_custom(func(a: Dictionary, b: Dictionary): return String(a.get("id", "")) < String(b.get("id", "")))
+	return structures
+
+func get_structures_overlapping_chunk(chunk: Vector2i) -> Array[Dictionary]:
+	var chunk_rect := Rect2i(chunk * CHUNK_SIZE, Vector2i(CHUNK_SIZE, CHUNK_SIZE))
+	var results: Array[Dictionary] = []
+	var seen := {}
+	for structure in _frozen_structures_intersecting_rect(chunk_rect):
+		var structure_id := String(structure.get("id", ""))
+		if structure_id == "" or seen.has(structure_id):
+			continue
+		seen[structure_id] = true
+		results.append(structure)
+	if _is_frozen_chunk(chunk):
+		return results
+	for structure in StructureGenerator.get_structures_overlapping_chunk(store.seed, chunk):
+		var structure_id := String(structure.get("id", ""))
+		if structure_id == "" or seen.has(structure_id) or frozen_structures_by_id.has(structure_id):
+			continue
+		seen[structure_id] = true
+		results.append(structure)
+	return results
+
+func get_structures_intersecting_rect(rect: Rect2i) -> Array[Dictionary]:
+	var min_chunk := store.to_chunk_coord(rect.position)
+	var max_chunk := store.to_chunk_coord(rect.position + rect.size - Vector2i.ONE)
+	var seen := {}
+	var structures: Array[Dictionary] = []
+	for chunk_y in range(min_chunk.y, max_chunk.y + 1):
+		for chunk_x in range(min_chunk.x, max_chunk.x + 1):
+			for structure in get_structures_overlapping_chunk(Vector2i(chunk_x, chunk_y)):
+				var structure_id := String(structure.get("id", ""))
+				if structure_id == "" or seen.has(structure_id):
+					continue
+				seen[structure_id] = true
+				structures.append(structure)
+	return structures
+
+func get_structure_spawns_near(center_tile: Vector2i, radius_tiles: int) -> Array[Dictionary]:
+	var search_rect := Rect2i(center_tile - Vector2i(radius_tiles, radius_tiles), Vector2i(radius_tiles * 2 + 1, radius_tiles * 2 + 1))
+	var results: Array[Dictionary] = []
+	for structure in get_structures_intersecting_rect(search_rect):
+		for raw_spawn in structure.get("spawns", []):
+			var spawn: Dictionary = Dictionary(raw_spawn)
+			var tile: Vector2i = spawn.get("tile", Vector2i.ZERO)
+			if not _rect_contains_tile(search_rect, tile):
+				continue
+			var record := spawn.duplicate(true)
+			record.structure_id = String(structure.get("id", ""))
+			record.structure_type = String(structure.get("type", ""))
+			record.position = Vector2((float(tile.x) + 0.5) * TILE_SIZE, float((tile.y + 1) * TILE_SIZE) - 0.5)
+			results.append(record)
+	return results
+
+func get_structure_lights_near(center_tile: Vector2i, radius_tiles: int) -> Array[Dictionary]:
+	var search_rect := Rect2i(center_tile - Vector2i(radius_tiles, radius_tiles), Vector2i(radius_tiles * 2 + 1, radius_tiles * 2 + 1))
+	var results: Array[Dictionary] = []
+	for structure in get_structures_intersecting_rect(search_rect):
+		for raw_light in structure.get("lights", []):
+			var light: Dictionary = Dictionary(raw_light)
+			var tile: Vector2i = light.get("tile", Vector2i.ZERO)
+			if _rect_contains_tile(search_rect, tile):
+				results.append(light.duplicate(true))
+	return results
+
+func get_structure_containers_near(center_tile: Vector2i, radius_tiles: int) -> Array[Dictionary]:
+	var search_rect := Rect2i(center_tile - Vector2i(radius_tiles, radius_tiles), Vector2i(radius_tiles * 2 + 1, radius_tiles * 2 + 1))
+	var results: Array[Dictionary] = []
+	for structure in get_structures_intersecting_rect(search_rect):
+		for raw_container in structure.get("containers", []):
+			var container: Dictionary = Dictionary(raw_container)
+			var tile: Vector2i = container.get("tile", Vector2i.ZERO)
+			if _rect_contains_tile(search_rect, tile):
+				results.append(container.duplicate(true))
+	return results
 
 func world_to_tile(point: Vector2) -> Vector2i:
 	return Vector2i(floori(point.x / TILE_SIZE), floori(point.y / TILE_SIZE))
@@ -392,7 +507,7 @@ func _structure_lights_for_player_tile(player_tile: Vector2i) -> Array[Dictionar
 	var cache_delta := player_tile - structure_light_cache_center
 	if cache_empty or maxi(absi(cache_delta.x), absi(cache_delta.y)) > STRUCTURE_LIGHT_CACHE_MARGIN_TILES / 2:
 		structure_light_cache_center = player_tile
-		structure_light_cache = StructureGenerator.get_structure_lights_near(store.seed, player_tile, STRUCTURE_LIGHT_RADIUS_TILES + STRUCTURE_LIGHT_CACHE_MARGIN_TILES)
+		structure_light_cache = get_structure_lights_near(player_tile, STRUCTURE_LIGHT_RADIUS_TILES + STRUCTURE_LIGHT_CACHE_MARGIN_TILES)
 		_record_perf_event("structure_light_cache_refresh")
 	else:
 		_record_perf_event("structure_light_cache_hit")
@@ -581,6 +696,81 @@ func _clear_solid_tile_cache() -> void:
 	solid_tile_cache.clear()
 	solid_tile_cache_physics_frame = -1
 
+func _clear_runtime_render_state() -> void:
+	for node in chunk_render_nodes.values():
+		if node != null and is_instance_valid(node):
+			node.queue_free()
+	chunk_render_nodes.clear()
+	visible_chunk_window = Rect2i(Vector2i(999999, 999999), Vector2i.ZERO)
+	visible_tile_rect = Rect2i(Vector2i.ZERO, Vector2i.ZERO)
+	visible_structures_cache.clear()
+	structure_light_cache.clear()
+	structure_light_cache_center = Vector2i(999999, 999999)
+	solid_tile_cache.clear()
+	solid_tile_cache_physics_frame = -1
+	chunk_warm_queue.clear()
+	queued_chunk_warmups.clear()
+	last_chunk_warm_center_tile = Vector2i(999999, 999999)
+
+func _clear_frozen_world_state() -> void:
+	frozen_structures_by_id.clear()
+	frozen_structure_chunk_index.clear()
+	frozen_chunk_keys.clear()
+	structure_light_cache.clear()
+	structure_light_cache_center = Vector2i(999999, 999999)
+
+func _set_frozen_structures(structures: Array) -> void:
+	frozen_structures_by_id.clear()
+	frozen_structure_chunk_index.clear()
+	for raw_structure in structures:
+		if not (raw_structure is Dictionary):
+			continue
+		var structure: Dictionary = Dictionary(raw_structure)
+		var structure_id := String(structure.get("id", ""))
+		if structure_id == "":
+			continue
+		frozen_structures_by_id[structure_id] = structure
+		var rect: Rect2i = structure.get("rect", Rect2i(Vector2i.ZERO, Vector2i.ZERO))
+		var min_chunk := store.to_chunk_coord(rect.position)
+		var max_chunk := store.to_chunk_coord(rect.position + rect.size - Vector2i.ONE)
+		for chunk_y in range(min_chunk.y, max_chunk.y + 1):
+			for chunk_x in range(min_chunk.x, max_chunk.x + 1):
+				var key := _structure_chunk_key(Vector2i(chunk_x, chunk_y))
+				if not frozen_structure_chunk_index.has(key):
+					frozen_structure_chunk_index[key] = []
+				frozen_structure_chunk_index[key].append(structure_id)
+	structure_light_cache.clear()
+	structure_light_cache_center = Vector2i(999999, 999999)
+
+func _frozen_structures_intersecting_rect(rect: Rect2i) -> Array[Dictionary]:
+	var results: Array[Dictionary] = []
+	var seen := {}
+	var min_chunk := store.to_chunk_coord(rect.position)
+	var max_chunk := store.to_chunk_coord(rect.position + rect.size - Vector2i.ONE)
+	for chunk_y in range(min_chunk.y, max_chunk.y + 1):
+		for chunk_x in range(min_chunk.x, max_chunk.x + 1):
+			var key := _structure_chunk_key(Vector2i(chunk_x, chunk_y))
+			for structure_id in frozen_structure_chunk_index.get(key, []):
+				var id := String(structure_id)
+				if seen.has(id) or not frozen_structures_by_id.has(id):
+					continue
+				var structure: Dictionary = frozen_structures_by_id[id]
+				var structure_rect: Rect2i = structure.get("rect", Rect2i(Vector2i.ZERO, Vector2i.ZERO))
+				if not _rects_intersect(structure_rect, rect):
+					continue
+				seen[id] = true
+				results.append(structure)
+	return results
+
+func _has_frozen_structure_near_rect(rect: Rect2i) -> bool:
+	return not _frozen_structures_intersecting_rect(rect).is_empty()
+
+func _is_frozen_chunk(chunk: Vector2i) -> bool:
+	return frozen_chunk_keys.has(_structure_chunk_key(chunk))
+
+func _structure_chunk_key(chunk: Vector2i) -> String:
+	return "%d,%d" % [chunk.x, chunk.y]
+
 func _chunk_render_key(layer_name: String, chunk: Vector2i) -> String:
 	return "%s:%d,%d" % [layer_name, chunk.x, chunk.y]
 
@@ -694,7 +884,7 @@ func _container_parent_node() -> Node2D:
 func _ensure_generated_container_at_tile(tile: Vector2i) -> void:
 	if get_tile(tile) != "chest_block":
 		return
-	for container in StructureGenerator.get_structure_containers_near(store.seed, tile, 1):
+	for container in get_structure_containers_near(tile, 1):
 		var container_tile: Vector2i = container.tile
 		if container_tile != tile:
 			continue
@@ -890,7 +1080,8 @@ func _draw_background_break_overlay_on(target, tile: Vector2i, background_id: St
 		target.draw_line(rect.position + Vector2(11, 7), rect.position + Vector2(3, 12), Color8(214, 176, 113), 1.0)
 
 func _collect_visible_structures(visible_rect: Rect2i) -> Array[Dictionary]:
-	if visible_rect.position.y + visible_rect.size.y - 1 < StructureGenerator.BAND1_MIN_Y or visible_rect.position.y > StructureGenerator.BAND1_MAX_Y:
+	if not _has_frozen_structure_near_rect(visible_rect) and not StructureGenerator.has_enabled_template_near_rect(visible_rect):
+		_record_perf_event("visible_structure_band_skip")
 		return []
 	var min_chunk := Vector2i(
 		floori(float(visible_rect.position.x) / 32.0),
@@ -900,12 +1091,13 @@ func _collect_visible_structures(visible_rect: Rect2i) -> Array[Dictionary]:
 		floori(float(visible_rect.position.x + visible_rect.size.x - 1) / 32.0),
 		floori(float(visible_rect.position.y + visible_rect.size.y - 1) / 32.0)
 	)
+	_record_perf_event_count("visible_structure_chunk_query", (max_chunk.x - min_chunk.x + 1) * (max_chunk.y - min_chunk.y + 1))
 	var seen_structures := {}
 	var structures: Array[Dictionary] = []
 	for chunk_y in range(min_chunk.y, max_chunk.y + 1):
 		for chunk_x in range(min_chunk.x, max_chunk.x + 1):
 			var chunk := Vector2i(chunk_x, chunk_y)
-			for structure in StructureGenerator.get_structures_overlapping_chunk(store.seed, chunk):
+			for structure in get_structures_overlapping_chunk(chunk):
 				var structure_id := String(structure.id)
 				if seen_structures.has(structure_id):
 					continue

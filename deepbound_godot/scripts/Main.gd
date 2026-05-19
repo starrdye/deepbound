@@ -11,6 +11,7 @@ const TextureFactory = preload("res://scripts/factories/TextureFactory.gd")
 const PlaceableCatalog = preload("res://scripts/catalogs/PlaceableCatalog.gd")
 const ChestController = preload("res://scripts/controllers/ChestController.gd")
 const DroppedItemController = preload("res://scripts/controllers/DroppedItemController.gd")
+const SaveGameSystem = preload("res://scripts/systems/SaveGameSystem.gd")
 const EnemyScene = preload("res://scenes/Enemy.tscn")
 
 const TEST_CHEST_OFFSET := Vector2(64, -16)
@@ -22,6 +23,8 @@ const STRUCTURE_SPAWN_RADIUS_TILES := 28
 const STRUCTURE_SPAWN_CHECK_STEP_TILES := 16
 const STRUCTURE_SPAWN_CHECK_INTERVAL_SECONDS := 0.20
 const HUD_LIGHT_REFRESH_INTERVAL_SECONDS := 0.12
+const MAIN_MENU_SCENE_PATH := "res://scenes/MainMenu.tscn"
+const PREFAB_DESIGNER_SCENE_PATH := "res://scenes/PrefabDesigner.tscn"
 
 const TRANSIENT_INPUT_ACTIONS := [
 	"move_left",
@@ -55,13 +58,19 @@ var structure_spawn_check_elapsed := STRUCTURE_SPAWN_CHECK_INTERVAL_SECONDS
 var hud_light_refresh_elapsed := HUD_LIGHT_REFRESH_INTERVAL_SECONDS
 var cached_hud_light := 1.0
 var cached_hud_light_tile := Vector2i(999999, 999999)
+var pause_menu_layer: CanvasLayer
+var pause_status_label: Label
+var pause_load_button: Button
+var pause_menu_open := false
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_FOCUS_IN:
 		_release_transient_input()
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_configure_input()
+	_configure_pause_processing()
 	TextureFactory.warm_runtime_cache()
 	if props_node == null:
 		props_node = Node2D.new()
@@ -82,12 +91,28 @@ func _ready() -> void:
 	if world.has_signal("chest_broken") and not world.chest_broken.is_connected(_on_chest_broken):
 		world.chest_broken.connect(_on_chest_broken)
 	player.world = world
+	_ensure_pause_menu()
 	_sync_selected_hotbar_item()
 	_spawn_test_chest()
-	_spawn_band_encounter(BandCatalog.resolve_band_id(world.world_to_tile(player.global_position).y))
-	_maybe_spawn_nearby_structure_encounters(true)
+	var pending_save := SaveGameSystem.consume_pending_save(get_tree().root)
+	if pending_save.is_empty():
+		_spawn_band_encounter(BandCatalog.resolve_band_id(world.world_to_tile(player.global_position).y))
+		_maybe_spawn_nearby_structure_encounters(true)
+	else:
+		var result := SaveGameSystem.apply_game_state(self, pending_save)
+		if not bool(result.get("ok", false)):
+			push_warning("Unable to apply pending save: %s" % String(result.get("error", "unknown error")))
+			_spawn_band_encounter(BandCatalog.resolve_band_id(world.world_to_tile(player.global_position).y))
+			_maybe_spawn_nearby_structure_encounters(true)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("pause_menu"):
+		_toggle_pause_menu()
+		get_viewport().set_input_as_handled()
+		return
+	if pause_menu_open:
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton:
 		if event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_cycle_hotbar(-1)
@@ -111,6 +136,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
+	if pause_menu_open:
+		return
 	structure_spawn_check_elapsed += delta
 	hud_light_refresh_elapsed += delta
 	_set_player_drag_lock(_is_item_drag_active())
@@ -159,6 +186,7 @@ func _configure_input() -> void:
 	_add_key("use_flare", KEY_Q)
 	_add_key("place_beacon", KEY_R)
 	_add_key("toggle_inventory", KEY_I)
+	_add_key("pause_menu", KEY_ESCAPE)
 	for index in range(HOTBAR_SIZE):
 		_add_key("hotbar_slot_%d" % [index + 1], KEY_1 + index)
 	_remove_key("debug_band_1", KEY_1)
@@ -184,6 +212,13 @@ func _remove_key(action_name: String, keycode: Key) -> void:
 	for event in InputMap.action_get_events(action_name):
 		if event is InputEventKey and event.keycode == keycode:
 			InputMap.action_erase_event(action_name, event)
+
+func _configure_pause_processing() -> void:
+	for node in [world, player, props_node, drops_node, enemies_node]:
+		if node != null:
+			node.process_mode = Node.PROCESS_MODE_PAUSABLE
+	if hud != null:
+		hud.process_mode = Node.PROCESS_MODE_ALWAYS
 
 func _release_transient_input() -> void:
 	for action_name in TRANSIENT_INPUT_ACTIONS:
@@ -242,7 +277,7 @@ func _maybe_spawn_nearby_structure_encounters(force := false) -> void:
 func _spawn_nearby_structure_encounters(player_tile: Vector2i) -> void:
 	if player_tile.y + STRUCTURE_SPAWN_RADIUS_TILES < StructureGenerator.BAND1_MIN_Y or player_tile.y - STRUCTURE_SPAWN_RADIUS_TILES > StructureGenerator.BAND1_MAX_Y:
 		return
-	var spawns: Array[Dictionary] = StructureGenerator.get_structure_spawns_near(world.store.seed, player_tile, STRUCTURE_SPAWN_RADIUS_TILES)
+	var spawns: Array[Dictionary] = world.get_structure_spawns_near(player_tile, STRUCTURE_SPAWN_RADIUS_TILES) if world.has_method("get_structure_spawns_near") else StructureGenerator.get_structure_spawns_near(world.store.seed, player_tile, STRUCTURE_SPAWN_RADIUS_TILES)
 	var structure_ids := {}
 	for spawn in spawns:
 		structure_ids[String(spawn.structure_id)] = true
@@ -553,6 +588,197 @@ func _is_item_drag_active() -> bool:
 func _set_player_drag_lock(locked: bool) -> void:
 	if is_instance_valid(player) and player.has_method("set_controls_locked"):
 		player.set_controls_locked(locked)
+
+func save_game() -> Dictionary:
+	return SaveGameSystem.save_game(self)
+
+func load_game() -> Dictionary:
+	var result := SaveGameSystem.load_game()
+	if not bool(result.get("ok", false)):
+		return result
+	var apply_result := SaveGameSystem.apply_game_state(self, Dictionary(result.get("data", {})))
+	if not bool(apply_result.get("ok", false)):
+		return {
+			"ok": false,
+			"path": result.get("path", SaveGameSystem.SAVE_PATH),
+			"error": String(apply_result.get("error", "Unable to apply save.")),
+			"data": {},
+		}
+	return result
+
+func _refresh_encounters_after_load() -> void:
+	for child in enemies_node.get_children():
+		child.queue_free()
+	current_encounter_band = ""
+	spawned_structure_encounters.clear()
+	last_structure_spawn_check_tile = Vector2i(999999, 999999)
+	structure_spawn_check_elapsed = STRUCTURE_SPAWN_CHECK_INTERVAL_SECONDS
+	cached_hud_light_tile = Vector2i(999999, 999999)
+	_spawn_band_encounter(BandCatalog.resolve_band_id(world.world_to_tile(player.global_position).y))
+	_maybe_spawn_nearby_structure_encounters(true)
+
+func _ensure_pause_menu() -> void:
+	if pause_menu_layer != null and is_instance_valid(pause_menu_layer):
+		return
+	pause_menu_layer = CanvasLayer.new()
+	pause_menu_layer.name = "PauseMenuLayer"
+	pause_menu_layer.layer = 40
+	pause_menu_layer.visible = false
+	pause_menu_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(pause_menu_layer)
+
+	var root := Control.new()
+	root.name = "PauseMenuRoot"
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.process_mode = Node.PROCESS_MODE_ALWAYS
+	pause_menu_layer.add_child(root)
+
+	var dim := ColorRect.new()
+	dim.name = "Dim"
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.0, 0.0, 0.0, 0.48)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(dim)
+
+	var panel := PanelContainer.new()
+	panel.name = "Panel"
+	panel.custom_minimum_size = Vector2(280, 322)
+	panel.add_theme_stylebox_override("panel", _pause_panel_style())
+	root.add_child(panel)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box.offset_left = 16
+	box.offset_top = 14
+	box.offset_right = -16
+	box.offset_bottom = -14
+	panel.add_child(box)
+
+	var title := Label.new()
+	title.text = "Paused"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_color", Color8(244, 231, 192))
+	title.add_theme_font_size_override("font_size", 18)
+	box.add_child(title)
+
+	box.add_child(_pause_button("Resume", _resume_game))
+	box.add_child(_pause_button("Save", _on_pause_save_pressed))
+	pause_load_button = _pause_button("Load", _on_pause_load_pressed)
+	box.add_child(pause_load_button)
+	box.add_child(_pause_button("Template Editor", _on_pause_template_editor_pressed))
+	box.add_child(_pause_button("Main Menu", _on_pause_main_menu_pressed))
+	box.add_child(_pause_button("Quit", _on_pause_quit_pressed))
+
+	pause_status_label = Label.new()
+	pause_status_label.text = ""
+	pause_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pause_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	pause_status_label.add_theme_color_override("font_color", Color8(178, 190, 182))
+	pause_status_label.add_theme_font_size_override("font_size", 12)
+	box.add_child(pause_status_label)
+
+	root.resized.connect(func(): _center_pause_panel(panel))
+	_center_pause_panel(panel)
+
+func _pause_panel_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.06, 0.09, 0.94)
+	style.border_color = Color8(91, 100, 107)
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_left = 4
+	style.corner_radius_bottom_right = 4
+	return style
+
+func _pause_button(label: String, callback: Callable) -> Button:
+	var button := Button.new()
+	button.text = label
+	button.focus_mode = Control.FOCUS_NONE
+	button.custom_minimum_size = Vector2(0, 34)
+	button.add_theme_font_size_override("font_size", 14)
+	button.pressed.connect(callback)
+	return button
+
+func _center_pause_panel(panel: Control) -> void:
+	if panel == null:
+		return
+	var viewport_size := get_viewport_rect().size
+	var panel_size := panel.custom_minimum_size
+	panel.position = (viewport_size - panel_size) * 0.5
+	panel.size = panel_size
+
+func _toggle_pause_menu() -> void:
+	if pause_menu_open:
+		_resume_game()
+	else:
+		_open_pause_menu()
+
+func _open_pause_menu() -> void:
+	_ensure_pause_menu()
+	pause_menu_open = true
+	pause_menu_layer.visible = true
+	_set_pause_status("")
+	_refresh_pause_buttons()
+	_set_player_drag_lock(true)
+	_release_transient_input()
+	get_tree().paused = true
+
+func _resume_game() -> void:
+	if not pause_menu_open:
+		return
+	get_tree().paused = false
+	pause_menu_open = false
+	if pause_menu_layer != null:
+		pause_menu_layer.visible = false
+	_set_player_drag_lock(_is_item_drag_active())
+
+func _refresh_pause_buttons() -> void:
+	if pause_load_button != null:
+		pause_load_button.disabled = not SaveGameSystem.has_save()
+
+func _set_pause_status(message: String) -> void:
+	if pause_status_label != null:
+		pause_status_label.text = message
+
+func _on_pause_save_pressed() -> void:
+	var result := save_game()
+	if bool(result.get("ok", false)):
+		_set_pause_status("Saved.")
+	else:
+		_set_pause_status(String(result.get("error", "Save failed.")))
+	_refresh_pause_buttons()
+
+func _on_pause_load_pressed() -> void:
+	if not SaveGameSystem.has_save():
+		_set_pause_status("No save found.")
+		_refresh_pause_buttons()
+		return
+	var result := load_game()
+	if bool(result.get("ok", false)):
+		_set_pause_status("Loaded.")
+	else:
+		_set_pause_status(String(result.get("error", "Load failed.")))
+	_refresh_pause_buttons()
+
+func _on_pause_template_editor_pressed() -> void:
+	_change_scene_from_pause(PREFAB_DESIGNER_SCENE_PATH)
+
+func _on_pause_main_menu_pressed() -> void:
+	_change_scene_from_pause(MAIN_MENU_SCENE_PATH)
+
+func _on_pause_quit_pressed() -> void:
+	get_tree().paused = false
+	get_tree().quit()
+
+func _change_scene_from_pause(path: String) -> void:
+	get_tree().paused = false
+	get_tree().change_scene_to_file(path)
 
 func _strike_nearby_enemy() -> void:
 	for child in enemies_node.get_children():

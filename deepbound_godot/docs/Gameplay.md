@@ -20,12 +20,21 @@ The Delver starts in Band 1 near a test chest and a starter cave skitter encount
 - Use/place selected hotbar item: right mouse
 - Strike: `E`
 - Inventory: `I`
+- Pause/menu: `Escape`
 - Hotbar select: `1-6` or mouse wheel
 - Flare: `Q`
 - Beacon: `R`
 - Prototype band jumps: `F1`, `F2`, `F3`
 
 Focus-loss protection clears transient input when the app window loses or regains focus, so returning to the game should not leave the Delver stuck walking in one direction.
+
+## Main Menu And Saves
+
+The game boots to `MainMenu.tscn`. From there the player can start a fresh world, load the single save slot, open the prefab designer, or quit.
+
+The Escape pause menu in the world supports Resume, Save, Load, Template Editor, Main Menu, and Quit. Save/load uses one slot at `user://saves/slot_1.json`.
+
+Saved games restore the seed, player state, inventory and hotbar, selected hotbar index, tile/background edits, damage, containers, drops, beacons, flares, and generated chunks. Explored/generated chunks are frozen in the save so later template edits do not rewrite already visited areas; unexplored chunks can still use current templates when generated. Enemies are refreshed after load rather than serialized.
 
 ## Health And Hearts
 
@@ -53,10 +62,11 @@ Current built-in settlement templates:
 
 - `goblin_village_full`: Band 1 `standard_caverns`, imported from the original goblin village generator.
 - `dwarf_fortress_full`: Band 2 `colossal_ant_chambers`, built from granite brick, cut granite floors, ironbound supports, rune blocks, forge walls, ladders, bridge decks, lanterns, chests, and dwarf spawn markers.
+- `dwarf_settlement_full`: Band 2 `colossal_ant_chambers`, a multi-level settlement with a great hall, forge, bridge decks, backdrop homes, lights, containers, and dwarf spawn markers.
 
 Template props can be decorative, lights, or containers. Container props stamp runtime `chest_block` collision markers so storage remains compatible with the existing chest/container systems. Light props expose structure light markers for the world lighting pass.
 
-Developers can launch `scenes/PrefabDesigner.tscn` to author or edit templates using the same in-game tile, background, prop, and enemy catalogs.
+Developers can launch `scenes/PrefabDesigner.tscn` to author or edit templates using the same in-game tile, background, prop, and enemy catalogs. The editor has a clipped Photoshop-style canvas with Fit View, 100%, Zoom +/- controls, Pan mode, undo/redo, directional nudges, and visible scrollbars on the canvas edges for large templates.
 
 ## Inventory
 
@@ -184,8 +194,11 @@ The current gameplay systems are covered by these Godot scripts:
 - `tests/heart_tests.gd`: full, half, and empty heart logic
 - `tests/chest_tests.gd`: block-backed chest open/close, mining spill drops, hotbar placement, and placement rejection behavior
 - `tests/inventory_tests.gd`: stack merge/swap, extra hotbar storage, hotbar drag/drop, manual world-item dragging, click pickup, and special auto-pickup
+- `tests/menu_tests.gd`: main menu button handlers, load-game path, and safe quit behavior
+- `tests/save_game_tests.gd`: single-slot save/load round trips, generated chunk freezing, frozen structures, and schema compatibility
 - `tests/village_template_tests.gd`: legacy village catalog metadata and building templates
 - `tests/goblin_village_tests.gd`: goblin village reference generation and template-backed chunk overlays
 - `tests/prefab_template_tests.gd`: prefab JSON validation, designer operations, import, and worldgen integration
 - `tests/dwarf_fortress_tests.gd`: Band 2 dwarf fortress assets, template validation, spawning, lights, containers, and chunk overlay stability
+- `tests/dwarf_settlement_tests.gd`: Band 2 dwarf settlement template validation, generated placement, lights, containers, and prop drawing
 - `tests/movement_perf_tests.gd`: cached terrain redraw, camera movement, chunk warm-ahead, and template-heavy fall regressions

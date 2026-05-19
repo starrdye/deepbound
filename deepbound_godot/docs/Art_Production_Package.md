@@ -169,6 +169,19 @@ Preview atlas: `assets/previews/dwarf_fortress_kit_preview.png`.
 
 Template: `data/templates/dwarf_fortress_full.json`.
 
+Additional settlement template: `data/templates/dwarf_settlement_full.json`.
+
+Additional settlement props:
+
+- `dwarf_great_hall_gate`: `64x64` central hall landmark.
+- `dwarf_back_house_lit`, `dwarf_back_house_dark`: `48x32` backdrop-only decorative houses.
+- `dwarf_rail_segment`: `48x16` balcony/bridge railing.
+- `dwarf_stair_brace`: `32x32` diagonal support/stair read.
+- `dwarf_glow_crystal`: `16x16` cyan light prop.
+- `dwarf_cistern_pool`: `48x16` shallow water/cistern prop.
+
+Source art-board: `assets/source_ai/dwarf_settlement_ai_reference.png`. Preview atlas: `assets/previews/dwarf_settlement_kit_preview.png`.
+
 Construction analysis:
 
 - Shell and towers use `dwarf_granite_brick` with `dwarf_ironbound_block` buttresses so the fortress reads as heavy and defensive.

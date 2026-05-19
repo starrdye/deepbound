@@ -178,7 +178,15 @@ static func get_palette_entries() -> Array[Dictionary]:
 		var background_def: Dictionary = BackgroundCatalog.get_background(id)
 		entries.append({"kind": "background", "id": id, "name": String(background_def.name), "layer": "backgrounds"})
 	for prop_id in get_prop_ids():
-		entries.append({"kind": _prop_kind(prop_id), "id": prop_id, "name": _title_from_id(prop_id), "layer": "props"})
+		entries.append({
+			"kind": _prop_kind(prop_id),
+			"id": prop_id,
+			"name": _title_from_id(prop_id),
+			"layer": "props",
+			"size": _prop_size_tiles(prop_id),
+			"draw_layer": _prop_default_draw_layer(prop_id),
+			"alpha": _prop_default_alpha(prop_id),
+		})
 	for enemy_id in _sorted_keys(EnemyCatalog.ENEMIES):
 		var enemy_def: Dictionary = EnemyCatalog.get_enemy(String(enemy_id))
 		entries.append({"kind": "spawn", "id": String(enemy_id), "name": "%s Spawn" % String(enemy_def.name), "layer": "spawns"})
@@ -210,6 +218,30 @@ static func get_structures_overlapping_chunk(seed: int, chunk: Vector2i) -> Arra
 	var structures := _get_structures_intersecting_rect(seed, chunk_rect)
 	chunk_structure_cache[cache_key] = structures
 	return structures
+
+static func has_enabled_template_near_rect(rect: Rect2i) -> bool:
+	var query_min_y := rect.position.y
+	var query_max_y := rect.position.y + rect.size.y - 1
+	for template in loaded_templates():
+		if not bool(Dictionary(template.metadata).get("enabled", true)):
+			continue
+		var bands: Array = Dictionary(template.metadata).get("bands", [])
+		if bands.is_empty():
+			return true
+		var template_size := _template_size(template)
+		var y_margin := maxi(TEMPLATE_SEARCH_MARGIN, maxi(template_size.x, template_size.y) + DEFAULT_PADDING_TILES)
+		var padded_min_y := query_min_y - y_margin
+		var padded_max_y := query_max_y + y_margin
+		for band_id in bands:
+			if not BandCatalog.BANDS.has(String(band_id)):
+				continue
+			var band: Dictionary = BandCatalog.BANDS[String(band_id)]
+			var band_min_y := int(band.min_y)
+			var raw_max_y = band.get("max_y", null)
+			var band_max_y := padded_max_y if raw_max_y == null else int(raw_max_y)
+			if padded_min_y <= band_max_y and padded_max_y >= band_min_y:
+				return true
+	return false
 
 static func get_structure_spawns_near(seed: int, center_tile: Vector2i, radius_tiles: int) -> Array[Dictionary]:
 	var cache_key := _near_cache_key(seed, "spawns", center_tile, radius_tiles)
@@ -695,16 +727,40 @@ static func _prop_kind(prop_id: String) -> String:
 	return "decoration"
 
 static func _is_light_prop(prop_id: String) -> bool:
-	return prop_id.find("torch") >= 0 or prop_id.find("lantern") >= 0 or prop_id.find("lamp") >= 0 or prop_id.find("forge") >= 0 or prop_id in ["flare", "outpost_beacon"]
+	return prop_id.find("torch") >= 0 or prop_id.find("lantern") >= 0 or prop_id.find("lamp") >= 0 or prop_id.find("forge") >= 0 or prop_id.find("crystal") >= 0 or prop_id in ["flare", "outpost_beacon"]
 
 static func _light_radius(prop_id: String) -> float:
 	if prop_id == "outpost_beacon":
 		return 12.0
 	if prop_id == "flare":
 		return 8.0
+	if prop_id.find("crystal") >= 0:
+		return 7.0
 	if prop_id.find("forge") >= 0:
 		return 8.0
 	return 6.0
+
+static func _prop_size_tiles(prop_id: String) -> Array[int]:
+	var path := "res://assets/props/%s.png" % prop_id
+	if not FileAccess.file_exists(path):
+		return [1, 1]
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return [1, 1]
+	var image := Image.new()
+	if image.load_png_from_buffer(file.get_buffer(file.get_length())) == OK:
+		return [maxi(1, ceili(float(image.get_width()) / 16.0)), maxi(1, ceili(float(image.get_height()) / 16.0))]
+	return [1, 1]
+
+static func _prop_default_draw_layer(prop_id: String) -> String:
+	if prop_id.find("_back_") >= 0 or prop_id.begins_with("dwarf_back_") or prop_id.begins_with("goblin_back_"):
+		return "backdrop"
+	return "foreground"
+
+static func _prop_default_alpha(prop_id: String) -> float:
+	if prop_id.find("_back_") >= 0 or prop_id.begins_with("dwarf_back_") or prop_id.begins_with("goblin_back_"):
+		return 0.50 if prop_id.find("dark") >= 0 else 0.62
+	return 1.0
 
 static func _title_from_id(id: String) -> String:
 	var words := id.split("_", false)

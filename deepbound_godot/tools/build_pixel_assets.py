@@ -25,6 +25,7 @@ AI_GOBLIN_VILLAGE_REFERENCE = ROOT / "assets" / "source_ai" / "goblin_village_ai
 AI_GOBLIN_BACKGROUND_REFERENCE = ROOT / "assets" / "source_ai" / "goblin_village_backgrounds_ai_reference.png"
 AI_GOBLIN_EXPANSION_REFERENCE = ROOT / "assets" / "source_ai" / "goblin_village_expansion_ai_reference.png"
 AI_DWARF_FORTRESS_REFERENCE = ROOT / "assets" / "source_ai" / "dwarf_fortress_ai_reference.png"
+AI_DWARF_SETTLEMENT_REFERENCE = ROOT / "assets" / "source_ai" / "dwarf_settlement_ai_reference.png"
 AI_HEART_CHEST_REFERENCE = ROOT / "assets" / "source_ai" / "chest_heart_ai_reference.png"
 AI_WEAPON_REFERENCE = ROOT / "assets" / "source_ai" / "weapon_modular_ai_reference.png"
 AI_HELD_ITEM_REFERENCE = ROOT / "assets" / "source_ai" / "held_item_pose_ai_reference.png"
@@ -152,6 +153,16 @@ DWARF_FORTRESS_PROP_IDS = [
     "dwarf_back_tower_dark",
     "dwarf_ore_cart",
     "dwarf_rune_marker",
+]
+
+DWARF_SETTLEMENT_PROP_IDS = [
+    "dwarf_great_hall_gate",
+    "dwarf_back_house_lit",
+    "dwarf_back_house_dark",
+    "dwarf_rail_segment",
+    "dwarf_stair_brace",
+    "dwarf_glow_crystal",
+    "dwarf_cistern_pool",
 ]
 
 PALETTE = {
@@ -681,6 +692,15 @@ def _crop_pixelized(src: Image.Image, center: tuple[int, int], crop_size: tuple[
     crop = src.crop((cx - cw // 2, cy - ch // 2, cx + cw // 2, cy + ch // 2)).convert("RGBA")
     resized = crop.resize(out_size, Image.Resampling.BOX).convert("RGBA")
     _remove_border_black(resized)
+    return _quantize_rgba(resized, colors)
+
+
+def _crop_pixelized_dark_board(src: Image.Image, center: tuple[int, int], crop_size: tuple[int, int], out_size: tuple[int, int], colors: int) -> Image.Image:
+    cx, cy = center
+    cw, ch = crop_size
+    crop = src.crop((cx - cw // 2, cy - ch // 2, cx + cw // 2, cy + ch // 2)).convert("RGBA")
+    resized = crop.resize(out_size, Image.Resampling.BOX).convert("RGBA")
+    _remove_border_black(resized, 46)
     return _quantize_rgba(resized, colors)
 
 
@@ -1533,6 +1553,117 @@ def make_dwarf_prop(prop_id: str) -> Image.Image:
         px(img, 8, 5, (255, 238, 154, 255))
     img.save(PROP_DIR / f"{prop_id}.png")
     return img
+
+
+def make_dwarf_settlement_prop(prop_id: str, source: Image.Image | None = None) -> Image.Image:
+    prop_sizes = {
+        "dwarf_great_hall_gate": (64, 64),
+        "dwarf_back_house_lit": (48, 32),
+        "dwarf_back_house_dark": (48, 32),
+        "dwarf_rail_segment": (48, 16),
+        "dwarf_stair_brace": (32, 32),
+        "dwarf_glow_crystal": (16, 16),
+        "dwarf_cistern_pool": (48, 16),
+    }
+    crop_specs = {
+        "dwarf_great_hall_gate": ((300, 330), (520, 520), (64, 64), 34),
+        "dwarf_back_house_lit": ((750, 340), (420, 320), (48, 32), 30),
+        "dwarf_back_house_dark": ((1235, 340), (420, 320), (48, 32), 28),
+        "dwarf_rail_segment": ((225, 750), (390, 185), (48, 16), 24),
+        "dwarf_stair_brace": ((620, 750), (390, 330), (32, 32), 26),
+        "dwarf_glow_crystal": ((944, 765), (230, 330), (16, 16), 26),
+        "dwarf_cistern_pool": ((1260, 790), (460, 240), (48, 16), 28),
+    }
+    if source is not None and prop_id in crop_specs:
+        center, crop_size, out_size, colors = crop_specs[prop_id]
+        prop = _crop_pixelized_dark_board(source, center, crop_size, out_size, colors)
+        prop.save(PROP_DIR / f"{prop_id}.png")
+        return prop
+
+    img = Image.new("RGBA", prop_sizes[prop_id], (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    outline = (24, 22, 24, 255)
+    stone = (72, 76, 78, 255)
+    stone_hi = (158, 164, 160, 255)
+    shadow = (34, 37, 40, 255)
+    iron = (61, 68, 72, 255)
+    brass = (216, 170, 83, 255)
+    ember = (255, 166, 43, 255)
+    glow = (85, 214, 210, 255)
+    water = (34, 91, 143, 220)
+    if prop_id == "dwarf_great_hall_gate":
+        rect(d, 5, 8, 54, 50, outline)
+        rect(d, 8, 10, 48, 46, stone)
+        rect(d, 18, 24, 28, 32, (41, 43, 44, 255))
+        d.polygon([(10, 12), (32, 2), (54, 12)], fill=shadow)
+        d.polygon([(14, 13), (32, 5), (50, 13)], fill=stone_hi)
+        for x in (11, 49):
+            rect(d, x, 17, 6, 37, shadow)
+            rect(d, x + 1, 18, 4, 34, stone_hi)
+        rect(d, 22, 28, 20, 26, outline)
+        rect(d, 24, 29, 16, 24, iron)
+        d.line((32, 29, 32, 53), fill=shadow, width=2)
+        rect(d, 29, 39, 6, 6, brass)
+        rect(d, 26, 18, 12, 8, shadow)
+        d.line((32, 18, 27, 24, 37, 24, 32, 18), fill=brass, width=1)
+    elif prop_id in ["dwarf_back_house_lit", "dwarf_back_house_dark"]:
+        alpha = 184 if prop_id == "dwarf_back_house_lit" else 146
+        light_alpha = 220 if prop_id == "dwarf_back_house_lit" else 0
+        rect(d, 4, 12, 40, 16, (28, 30, 32, alpha))
+        rect(d, 6, 14, 36, 13, (64, 66, 62, alpha))
+        d.polygon([(2, 13), (24, 3), (46, 13)], fill=(22, 21, 22, alpha))
+        d.polygon([(7, 13), (24, 5), (41, 13)], fill=(94, 80, 56, alpha))
+        rect(d, 20, 17, 8, 11, (26, 24, 24, alpha))
+        for x in (10, 34):
+            rect(d, x, 17, 5, 6, (13, 14, 16, alpha))
+            if light_alpha > 0:
+                rect(d, x + 1, 18, 3, 4, (255, 190, 82, light_alpha))
+    elif prop_id == "dwarf_rail_segment":
+        rect(d, 1, 3, 46, 11, outline)
+        rect(d, 2, 4, 44, 9, stone)
+        rect(d, 4, 5, 40, 2, stone_hi)
+        for x in range(7, 42, 8):
+            rect(d, x, 6, 3, 7, shadow)
+            px(img, x + 1, 6, brass)
+    elif prop_id == "dwarf_stair_brace":
+        rect(d, 22, 2, 7, 27, outline)
+        rect(d, 23, 3, 5, 25, stone)
+        d.polygon([(3, 27), (24, 6), (28, 10), (8, 30)], fill=outline)
+        d.polygon([(5, 27), (24, 8), (26, 10), (8, 28)], fill=stone_hi)
+        for offset in range(0, 18, 5):
+            d.line((7 + offset, 26 - offset, 13 + offset, 26 - offset), fill=brass, width=1)
+    elif prop_id == "dwarf_glow_crystal":
+        rect(d, 5, 11, 6, 4, outline)
+        rect(d, 6, 12, 4, 3, brass)
+        d.polygon([(8, 1), (13, 7), (9, 13), (3, 8)], fill=outline)
+        d.polygon([(8, 2), (12, 7), (9, 12), (4, 8)], fill=glow)
+        d.line((8, 3, 8, 11), fill=(182, 255, 236, 255), width=1)
+        px(img, 13, 5, glow)
+        px(img, 2, 10, glow)
+    elif prop_id == "dwarf_cistern_pool":
+        rect(d, 1, 2, 46, 13, outline)
+        rect(d, 3, 3, 42, 11, stone)
+        rect(d, 5, 4, 38, 7, water)
+        d.line((7, 6, 41, 6), fill=(85, 214, 210, 180), width=1)
+        d.line((11, 9, 24, 5, 36, 10), fill=(112, 189, 229, 160), width=1)
+        for x in (4, 40):
+            rect(d, x, 3, 3, 11, shadow)
+            px(img, x + 1, 4, brass)
+    img.save(PROP_DIR / f"{prop_id}.png")
+    return img
+
+
+def make_dwarf_settlement_assets() -> None:
+    source = Image.open(AI_DWARF_SETTLEMENT_REFERENCE).convert("RGBA") if AI_DWARF_SETTLEMENT_REFERENCE.exists() else None
+    props = [make_dwarf_settlement_prop(prop_id, source) for prop_id in DWARF_SETTLEMENT_PROP_IDS]
+    columns = 4
+    rows = max(1, (len(props) + columns - 1) // columns)
+    atlas = Image.new("RGBA", (16 * columns, 16 * rows), (0, 0, 0, 0))
+    for index, prop in enumerate(props):
+        preview_cell = prop.resize((16, 16), Image.Resampling.NEAREST)
+        atlas.alpha_composite(preview_cell, ((index % columns) * 16, (index // columns) * 16))
+    atlas.save(PREVIEW_DIR / "dwarf_settlement_kit.png")
+    make_preview(atlas, PREVIEW_DIR / "dwarf_settlement_kit_preview.png", scale=8, grid=(16, 16))
 
 
 def make_dwarf_reference_board(tiles: list[Image.Image], backgrounds: list[Image.Image], props: list[Image.Image]) -> None:
@@ -2456,6 +2587,7 @@ def make_tiles() -> None:
         make_drow_village_assets()
         make_goblin_village_assets()
         make_dwarf_fortress_assets()
+        make_dwarf_settlement_assets()
         return
 
     make_tile("loose_dirt", (122, 75, 46), (168, 111, 60), (95, 61, 43))
@@ -2492,6 +2624,7 @@ def make_tiles() -> None:
     make_drow_village_assets()
     make_goblin_village_assets()
     make_dwarf_fortress_assets()
+    make_dwarf_settlement_assets()
 
 
 def main() -> None:

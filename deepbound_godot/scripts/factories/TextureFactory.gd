@@ -66,7 +66,14 @@ const CORE_PROP_IDS := [
 	"dwarf_back_tower_lit",
 	"dwarf_back_tower_dark",
 	"dwarf_ore_cart",
-	"dwarf_rune_marker"
+	"dwarf_rune_marker",
+	"dwarf_great_hall_gate",
+	"dwarf_back_house_lit",
+	"dwarf_back_house_dark",
+	"dwarf_rail_segment",
+	"dwarf_stair_brace",
+	"dwarf_glow_crystal",
+	"dwarf_cistern_pool"
 ]
 
 static var cache: Dictionary = {}

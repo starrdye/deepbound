@@ -199,6 +199,13 @@ const PROP_IDS := [
 	"dwarf_back_tower_dark",
 	"dwarf_ore_cart",
 	"dwarf_rune_marker",
+	"dwarf_great_hall_gate",
+	"dwarf_back_house_lit",
+	"dwarf_back_house_dark",
+	"dwarf_rail_segment",
+	"dwarf_stair_brace",
+	"dwarf_glow_crystal",
+	"dwarf_cistern_pool",
 	"chest_closed",
 	"chest_open",
 	"chest_open_sheet",
@@ -218,6 +225,7 @@ const SOURCE_AI_IDS := [
 	"goblin_village_backgrounds_ai_reference",
 	"goblin_village_expansion_ai_reference",
 	"dwarf_fortress_ai_reference",
+	"dwarf_settlement_ai_reference",
 	"chest_heart_ai_reference",
 	"weapon_modular_ai_reference",
 	"held_item_pose_ai_reference",
@@ -244,7 +252,13 @@ const PROP_SIZES := {
 	"dwarf_armor_rack": Vector2i(16, 32),
 	"dwarf_back_tower_lit": Vector2i(64, 48),
 	"dwarf_back_tower_dark": Vector2i(64, 48),
-	"dwarf_ore_cart": Vector2i(32, 16)
+	"dwarf_ore_cart": Vector2i(32, 16),
+	"dwarf_great_hall_gate": Vector2i(64, 64),
+	"dwarf_back_house_lit": Vector2i(48, 32),
+	"dwarf_back_house_dark": Vector2i(48, 32),
+	"dwarf_rail_segment": Vector2i(48, 16),
+	"dwarf_stair_brace": Vector2i(32, 32),
+	"dwarf_cistern_pool": Vector2i(48, 16)
 }
 
 func _initialize() -> void:

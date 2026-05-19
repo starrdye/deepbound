@@ -2,10 +2,12 @@
 
 ## Runtime Structure
 
-- `scenes/Main.tscn` is the boot scene.
-- `scripts/Main.gd` configures input, spawns Band encounters, updates HUD state, owns drop spawning, and coordinates right-click chest use and selected-hotbar placement.
+- `scenes/MainMenu.tscn` is the boot scene and launches fresh worlds, the single save slot, the prefab designer, or quit.
+- `scenes/Main.tscn` is the playable world scene.
+- `scripts/Main.gd` configures input, spawns Band encounters, updates HUD state, owns drop spawning, coordinates right-click chest use and selected-hotbar placement, and provides the Escape pause menu.
 - `scripts/World.gd` owns `ChunkStore`, tile drawing, mining calls, beacons, flares, and autotile-style edge rendering.
 - `scripts/systems/CollisionSystem.gd` owns bottom-center AABB tile collision for all moving entities.
+- `scripts/systems/SaveGameSystem.gd` owns schema-versioned single-slot JSON save/load and pending save handoff from the main menu.
 - `scripts/systems/PrefabTemplateRegistry.gd` loads built-in and user templates, validates JSON, caches deterministic structure instances, and answers chunk/nearby light/spawn/container queries.
 - `scripts/controllers/PrefabDesignerController.gd` powers the standalone `scenes/PrefabDesigner.tscn` utility for drawing and saving reusable prefab templates.
 - `scripts/controllers/PlayerController.gd` owns Delver intent, villager-style sprite animation, drilling, health, heat, inventory, and calls the shared collision solver.
@@ -24,7 +26,7 @@
 - `InventorySystem.gd` stores slot arrays, stack caps, matching-stack merges, overflow, swaps, quick slots, and capacity checks.
 - `HeartSystem.gd` maps HP to full, half, and empty heart states.
 - `SpawnSystem.gd` finds clear enemy spawn points so monsters do not appear embedded in blocks.
-- `data/templates/*.json` stores built-in sparse prefab templates. `goblin_village_full.json` is the imported Band 1 village, and `dwarf_fortress_full.json` is the Band 2 fortress settlement.
+- `data/templates/*.json` stores built-in sparse prefab templates. `goblin_village_full.json` is the imported Band 1 village, while `dwarf_fortress_full.json` and `dwarf_settlement_full.json` are Band 2 dwarf settlements.
 
 ## Procedural Generation
 
@@ -36,12 +38,21 @@ Built-in templates currently include:
 
 - `goblin_village_full`: Band 1 `standard_caverns`, imported from the legacy deterministic goblin village generator.
 - `dwarf_fortress_full`: Band 2 `colossal_ant_chambers`, a granite/iron fortress with forge rooms, ladders, bridge decks, storage, lanterns, and dwarf spawn markers.
+- `dwarf_settlement_full`: Band 2 `colossal_ant_chambers`, a multi-level settlement with a great hall, forge, backdrop houses, rails, lights, containers, and dwarf spawn markers.
 
 The old live goblin village builder remains available for importer/reference tests. Runtime chunk generation uses template overlays so settlement output is stable regardless of chunk generation order.
+
+## Save/Load
+
+`SaveGameSystem.gd` writes `user://saves/slot_1.json` as schema version `2`. The save stores the world seed, player state, inventory/hotbar state, tile and background overrides, damage, containers, drops, beacons, flares, generated foreground/background chunks, and frozen structure metadata for visited/generated chunks.
+
+Loading restores generated chunks before applying player edits, so explored areas remain stable if templates are later changed. Unexplored chunks continue to use the current generator and latest enabled templates. Enemies are not serialized; band and structure encounter logic refreshes them after load.
 
 ## Prefab Designer
 
 `scenes/PrefabDesigner.tscn` is a standalone utility scene. It builds its palette from `TileCatalog`, `BackgroundCatalog`, `EnemyCatalog`, and `assets/props/*.png`, supports foreground/background/prop/spawn layers, and saves sparse JSON through `PrefabTemplateRegistry.save_template`.
+
+The editor canvas is fixed inside a clipped central frame. Large templates use a Pan tool, mouse drag/wheel shortcuts, Fit View, 100%, Zoom +/- buttons, and visible horizontal/vertical canvas scrollbars. Undo/redo covers normal mutating edits while view changes remain non-undoable.
 
 Template cells are sparse: blank cells mean "do not stamp", explicit `air` foreground entries carve terrain, and explicit `empty` background entries clear walls. Template props can expose light and container markers based on prop kind/id; multi-tile container props stamp their runtime `chest_block` marker on the bottom-left occupied cell.
 

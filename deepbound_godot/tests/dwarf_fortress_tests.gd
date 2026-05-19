@@ -3,6 +3,7 @@ extends SceneTree
 const TileCatalog = preload("res://scripts/catalogs/TileCatalog.gd")
 const BackgroundCatalog = preload("res://scripts/catalogs/BackgroundCatalog.gd")
 const EnemyCatalog = preload("res://scripts/catalogs/EnemyCatalog.gd")
+const DeepboundWorld = preload("res://scripts/World.gd")
 const PrefabTemplateRegistry = preload("res://scripts/systems/PrefabTemplateRegistry.gd")
 const StructureGenerator = preload("res://scripts/systems/StructureGenerator.gd")
 const ChunkStore = preload("res://scripts/systems/ChunkStore.gd")
@@ -26,6 +27,7 @@ func _run() -> void:
 	_test_template_loads_and_assets_exist()
 	_test_direct_instantiation_has_fortress_content()
 	_test_template_worldgen_spawns_in_second_band()
+	await _test_world_visible_cache_draws_dwarf_props()
 	if failures.is_empty():
 		print("Deepbound Godot dwarf fortress tests passed.")
 		quit(0)
@@ -98,6 +100,40 @@ func _test_template_worldgen_spawns_in_second_band() -> void:
 	_assert(store_b.get_tile(sample_tile) == store_a.get_tile(sample_tile), "dwarf fortress foreground overlay should be chunk-order stable")
 	_assert(store_a.get_background_tile(sample_background) == String(structure.backgrounds[sample_background]), "chunk background generation should apply dwarf fortress wall overlays")
 
+func _test_world_visible_cache_draws_dwarf_props() -> void:
+	PrefabTemplateRegistry.clear_cache()
+	var structure := _find_first_dwarf_structure()
+	_assert(not structure.is_empty(), "world visual cache test needs a generated Band 2 dwarf fortress")
+	if structure.is_empty():
+		return
+	var rect: Rect2i = structure.rect
+	var camera := Camera2D.new()
+	camera.name = "DwarfFortressVisualCamera"
+	camera.enabled = true
+	camera.zoom = Vector2(2, 2)
+	camera.global_position = Vector2(
+		float((rect.position.x + rect.size.x / 2) * DeepboundWorld.TILE_SIZE),
+		float((rect.position.y + rect.size.y / 2) * DeepboundWorld.TILE_SIZE)
+	)
+	get_root().add_child(camera)
+	camera.make_current()
+	var world := DeepboundWorld.new()
+	world.name = "DwarfFortressVisualWorld"
+	get_root().add_child(world)
+	world.set_process(false)
+	await _flush_frames(2)
+	world.enable_debug_perf_counters(true)
+	world.refresh_visible_chunk_window(true)
+	_assert(world.get_debug_perf_counter("visible_structure_chunk_query") > 0, "world visual cache should query visible structure chunks")
+	_assert(_has_template_structure(world._cached_visible_structures(), "dwarf_fortress_full"), "world visual cache should include Band 2 dwarf fortress structures")
+	world.reset_debug_perf_counters()
+	world._queue_prop_overlay_redraw()
+	await _flush_frames(2)
+	_assert(world.get_debug_perf_counter("structure_prop_drawn") > 0, "world prop overlays should draw Band 2 dwarf fortress props")
+	world.queue_free()
+	camera.queue_free()
+	await _flush_frames(1)
+
 func _find_first_dwarf_structure() -> Dictionary:
 	for chunk_y in range(12, 25):
 		for chunk_x in range(-36, 37):
@@ -105,6 +141,12 @@ func _find_first_dwarf_structure() -> Dictionary:
 				if String(structure.get("source_template_id", "")) == "dwarf_fortress_full":
 					return structure
 	return {}
+
+func _has_template_structure(structures: Array, template_id: String) -> bool:
+	for structure in structures:
+		if String(structure.get("source_template_id", "")) == template_id:
+			return true
+	return false
 
 func _has_structure_record(records: Array, structure_id: String) -> bool:
 	for record in records:
@@ -129,3 +171,7 @@ func _first_background_tile(structure: Dictionary) -> Vector2i:
 	for tile in Dictionary(structure.backgrounds).keys():
 		return tile
 	return Vector2i(999999, 999999)
+
+func _flush_frames(count: int) -> void:
+	for _i in range(count):
+		await process_frame

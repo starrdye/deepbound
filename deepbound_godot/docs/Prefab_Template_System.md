@@ -12,6 +12,7 @@ Current built-ins:
 | --- | --- | --- |
 | `goblin_village_full` | `standard_caverns` | Imported full Band 1 goblin village. |
 | `dwarf_fortress_full` | `colossal_ant_chambers` | Band 2 stone-and-iron fortress with forge rooms, ladders, lights, containers, and dwarf spawn markers. |
+| `dwarf_settlement_full` | `colossal_ant_chambers` | Band 2 multi-level dwarf settlement with a great hall, forge, ladders, bridge decks, backdrop houses, lights, containers, and dwarf spawn markers. |
 
 ## JSON Shape
 
@@ -52,7 +53,9 @@ Launch `scenes/PrefabDesigner.tscn` as a utility scene to author templates. The 
 - `EnemyCatalog`
 - `assets/props/*.png`
 
-The designer supports foreground, background, prop, and spawn-marker layers; adjustable canvas size; camera pan/zoom; pencil, eraser, bucket fill, and marquee selection; anchor metadata; band metadata; and JSON save/load.
+The designer supports foreground, background, prop, and spawn-marker layers; adjustable canvas size; pencil, eraser, bucket fill, pan, and marquee selection tools; undo/redo; anchor metadata; band metadata; and JSON save/load.
+
+Large templates are edited inside a fixed, clipped central canvas frame so zoomed-in art cannot draw over the asset list or template inspector. Navigation controls include mouse wheel zoom, middle/right drag panning, Pan-tool left drag, Fit View, 100%, Zoom +/- buttons, directional nudge buttons, and visible canvas scrollbars on the right and bottom edges.
 
 ## Runtime Integration
 
@@ -69,7 +72,9 @@ At worldgen time, `StructureGenerator.gd` asks the registry for structures overl
 - `rect`
 - `type`
 
-`ChunkStore` applies foreground and background overlays during chunk generation. World lighting and spawn systems query nearby `lights`, `containers`, and `spawns` from the same registry.
+`ChunkStore` applies foreground and background overlays during chunk generation. World lighting and spawn systems query nearby `lights`, `containers`, and `spawns` through `World.gd`, which can merge saved frozen structure records for explored chunks with live template generation for unexplored chunks.
+
+Saved games use schema version `2` and freeze generated foreground/background chunks plus the structure dictionaries intersecting those chunks. Editing a template affects new worlds and unexplored regions of existing saves; already generated regions reload from the save payload first, then apply tile/background overrides and damage.
 
 ## Performance Notes
 

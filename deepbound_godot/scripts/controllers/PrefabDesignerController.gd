@@ -7,6 +7,7 @@ const TextureFactory = preload("res://scripts/factories/TextureFactory.gd")
 const TileCatalog = preload("res://scripts/catalogs/TileCatalog.gd")
 const BackgroundCatalog = preload("res://scripts/catalogs/BackgroundCatalog.gd")
 const BandCatalog = preload("res://scripts/catalogs/BandCatalog.gd")
+const EnemyCatalog = preload("res://scripts/catalogs/EnemyCatalog.gd")
 
 const GRID_TILE_SIZE := 16
 const MAX_CANVAS_SIZE := 256
@@ -142,9 +143,23 @@ class DesignerCanvasView:
 					draw_rect(tile_rect(tile, size).grow(-2), Color8(202, 139, 68, 180), true)
 		if designer.layer_visible.get("spawns", true):
 			for tile in designer.spawns.keys():
-				var rect := tile_rect(tile).grow(-2)
-				draw_rect(rect, Color(0.78, 0.14, 0.14, 0.65), true)
+				var entry: Dictionary = designer.spawns[tile]
+				var enemy_id := String(entry.get("enemy_id", "cave_skitter"))
+				var enemy_def := EnemyCatalog.get_enemy(enemy_id)
+				# Use the enemy's catalogue color so different enemy types are visually distinct.
+				var base_col: Color = Color(enemy_def.get("color", Color8(200, 50, 50)))
+				base_col.a = 0.72
+				var rect := tile_rect(tile).grow(-1)
+				draw_rect(rect, base_col, true)
 				draw_rect(rect, Color8(255, 224, 161), false, maxf(1.0, zoom))
+				# At ≥1.5× zoom draw a 4-char enemy abbreviation so the type is readable.
+				if zoom >= 1.5:
+					var font := get_theme_default_font()
+					if font != null:
+						var parts := enemy_id.split("_", false)
+						var abbr := (parts[0].left(3) if parts.size() == 1 else parts[0].left(2) + parts[1].left(2)).to_upper()
+						draw_string(font, rect.position + Vector2(2.0, rect.size.y - 3.0),
+							abbr, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 4.0, 7, Color8(255, 255, 255, 220))
 
 	func _draw_grid(canvas_rect: Rect2) -> void:
 		var line_color := Color(0.45, 0.50, 0.56, 0.28)
@@ -201,6 +216,7 @@ var canvas_h_scrollbar: HScrollBar
 var updating_canvas_scrollbars := false
 var undo_button: Button
 var redo_button: Button
+var layer_option: OptionButton = null   # active-layer selector above palette
 var palette_search: LineEdit
 var palette_list: ItemList
 var path_edit: LineEdit
@@ -258,6 +274,10 @@ func resize_canvas(width: int, height: int) -> void:
 func set_active_layer(layer_name: String) -> void:
 	if layer_name in LAYERS:
 		active_layer = layer_name
+		# Sync the OptionButton if it exists and isn't the one that triggered this.
+		if layer_option != null and layer_option.selected != LAYERS.find(layer_name):
+			layer_option.selected = LAYERS.find(layer_name)
+		_refresh_palette()
 
 func set_active_tool(tool_name: String) -> void:
 	if tool_name in [TOOL_PENCIL, TOOL_ERASER, TOOL_BUCKET, TOOL_PAN, TOOL_SELECT]:
@@ -267,7 +287,11 @@ func set_active_tool(tool_name: String) -> void:
 
 func select_palette_asset(entry: Dictionary) -> void:
 	selected_asset = entry.duplicate(true)
-	active_layer = String(entry.get("layer", active_layer))
+	var new_layer := String(entry.get("layer", active_layer))
+	if new_layer != active_layer:
+		active_layer = new_layer
+		if layer_option != null and layer_option.selected != LAYERS.find(active_layer):
+			layer_option.selected = LAYERS.find(active_layer)
 	_sync_prop_controls_from_selection()
 
 func fit_view_to_template() -> void:
@@ -627,6 +651,19 @@ func _build_ui() -> void:
 	palette_list.item_selected.connect(_on_palette_selected)
 	left.add_child(palette_list)
 
+	## Active layer dropdown — switches the editing layer and filters the palette.
+	var layer_label := Label.new()
+	layer_label.text = "Active Layer:"
+	layer_label.add_theme_font_size_override("font_size", 11)
+	layer_label.add_theme_color_override("font_color", Color8(180, 190, 180))
+	left.add_child(layer_label)
+	layer_option = OptionButton.new()
+	for layer_name in LAYERS:
+		layer_option.add_item(layer_name.capitalize())
+	layer_option.selected = LAYERS.find(active_layer)
+	layer_option.item_selected.connect(func(idx: int): set_active_layer(LAYERS[idx]))
+	left.add_child(layer_option)
+
 	var tool_row := HBoxContainer.new()
 	left.add_child(tool_row)
 	for tool_name in [TOOL_PENCIL, TOOL_ERASER, TOOL_BUCKET, TOOL_PAN, TOOL_SELECT]:
@@ -796,7 +833,10 @@ func _refresh_palette() -> void:
 	var query := palette_search.text.to_lower() if palette_search != null else ""
 	palette_list.clear()
 	for entry in PrefabTemplateRegistry.get_palette_entries():
-		var label := "%s  [%s]" % [String(entry.name), String(entry.layer)]
+		# Only show entries that belong to the currently active layer.
+		if String(entry.get("layer", "")) != active_layer:
+			continue
+		var label := String(entry.name)
 		if query != "" and label.to_lower().find(query) < 0 and String(entry.id).to_lower().find(query) < 0:
 			continue
 		var index := palette_list.add_item(label)

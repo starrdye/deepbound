@@ -21,6 +21,7 @@ AI_PLAYER_REFERENCE_V2 = ROOT / "assets" / "source_ai" / "delver_main_character_
 AI_ENEMY_REFERENCE = ROOT / "assets" / "source_ai" / "enemy_roster_ai_reference.png"
 AI_WORLD_REFERENCE = ROOT / "assets" / "source_ai" / "world_asset_ai_reference.png"
 AI_DROW_TILE_REFERENCE = ROOT / "assets" / "source_ai" / "drow_village_tiles_ai_reference.png"
+AI_DROW_SETTLEMENT_REFERENCE = ROOT / "assets" / "source_ai" / "drow_settlement_structures_ai_reference.png"
 AI_GOBLIN_VILLAGE_REFERENCE = ROOT / "assets" / "source_ai" / "goblin_village_ai_reference.png"
 AI_GOBLIN_BACKGROUND_REFERENCE = ROOT / "assets" / "source_ai" / "goblin_village_backgrounds_ai_reference.png"
 AI_GOBLIN_EXPANSION_REFERENCE = ROOT / "assets" / "source_ai" / "goblin_village_expansion_ai_reference.png"
@@ -88,6 +89,28 @@ DROW_VILLAGE_PROP_IDS = [
     "drow_bridge_post",
     "drow_mushroom_lamp",
     "drow_web_bridge",
+]
+
+DROW_SETTLEMENT_BACKGROUND_IDS = [
+    "drow_carved_background",
+    "drow_webbed_background",
+    "drow_scriptuarium_background",
+]
+
+DROW_SETTLEMENT_PROP_IDS = [
+    "drow_spider_totem",
+    "drow_spectral_torch",
+    "drow_silk_curtain",
+    "drow_bookshelf",
+    "drow_rift_crystal",
+    "drow_wall_map",
+    "drow_weapon_rack",
+    "drow_iron_railing",
+    "drow_chain_ladder",
+    "drow_cocoon",
+    "drow_web_cluster",
+    "drow_back_house_lit",
+    "drow_back_house_dark",
 ]
 
 GOBLIN_VILLAGE_TILE_IDS = [
@@ -1066,6 +1089,246 @@ def make_drow_village_assets() -> None:
         atlas.alpha_composite(prop, (((index + len(tiles)) % 8) * 16, ((index + len(tiles)) // 8) * 16))
     atlas.save(PREVIEW_DIR / "drow_village_kit.png")
     make_preview(atlas, PREVIEW_DIR / "drow_village_kit_preview.png", scale=8, grid=(16, 16))
+
+
+def make_drow_background(background_id: str) -> Image.Image:
+    palettes = {
+        "drow_carved_background": {
+            "base": (28, 32, 68, 216),
+            "shadow": (14, 16, 38, 230),
+            "hi": (85, 214, 210, 210),
+        },
+        "drow_webbed_background": {
+            "base": (22, 26, 58, 212),
+            "shadow": (12, 14, 34, 228),
+            "hi": (160, 112, 220, 210),
+        },
+        "drow_scriptuarium_background": {
+            "base": (24, 28, 64, 216),
+            "shadow": (14, 18, 40, 228),
+            "hi": (218, 188, 255, 210),
+        },
+    }
+    palette = palettes[background_id]
+    img = Image.new("RGBA", (16, 16), palette["base"])
+    d = ImageDraw.Draw(img)
+    shadow = palette["shadow"]
+    hi = palette["hi"]
+    if background_id == "drow_carved_background":
+        for y in (4, 9, 14):
+            d.line((0, y, 15, y), fill=shadow, width=1)
+        for x in (5, 11):
+            d.line((x, 0, x, 15), fill=(36, 42, 82, 220), width=1)
+        px(img, 8, 6, hi)
+        px(img, 3, 11, (112, 206, 177, 200))
+    elif background_id == "drow_webbed_background":
+        d.line((1, 1, 14, 14), fill=shadow, width=1)
+        d.line((14, 1, 1, 14), fill=shadow, width=1)
+        d.line((7, 1, 1, 7), fill=(98, 71, 155, 190), width=1)
+        d.line((8, 14, 14, 8), fill=(98, 71, 155, 190), width=1)
+        px(img, 7, 7, hi)
+        px(img, 2, 13, (160, 112, 220, 180))
+    else:
+        for y in (5, 10):
+            d.line((0, y, 15, y), fill=shadow, width=1)
+        d.line((8, 2, 8, 13), fill=hi, width=1)
+        d.line((5, 7, 11, 7), fill=(182, 148, 255, 200), width=1)
+        px(img, 8, 4, (218, 188, 255, 220))
+        px(img, 3, 12, (112, 206, 177, 180))
+    img.save(BACKGROUND_DIR / f"{background_id}.png")
+    return img
+
+
+def make_drow_settlement_prop(prop_id: str, source: Image.Image | None = None) -> Image.Image:
+    prop_sizes = {
+        "drow_spider_totem": (32, 48),
+        "drow_spectral_torch": (16, 32),
+        "drow_silk_curtain": (32, 48),
+        "drow_bookshelf": (48, 48),
+        "drow_rift_crystal": (16, 32),
+        "drow_wall_map": (48, 32),
+        "drow_weapon_rack": (32, 32),
+        "drow_iron_railing": (32, 16),
+        "drow_chain_ladder": (16, 48),
+        "drow_cocoon": (16, 32),
+        "drow_web_cluster": (32, 32),
+        "drow_back_house_lit": (48, 32),
+        "drow_back_house_dark": (48, 32),
+    }
+    crop_specs = {
+        "drow_spider_totem": ((210, 360), (310, 380), (32, 48), 32),
+        "drow_spectral_torch": ((610, 360), (160, 310), (16, 32), 28),
+        "drow_silk_curtain": ((940, 360), (310, 380), (32, 48), 30),
+        "drow_bookshelf": ((1310, 360), (380, 380), (48, 48), 32),
+        "drow_rift_crystal": ((1660, 360), (200, 380), (16, 32), 30),
+        "drow_wall_map": ((1940, 360), (380, 310), (48, 32), 28),
+        "drow_weapon_rack": ((210, 820), (310, 310), (32, 32), 28),
+        "drow_iron_railing": ((610, 820), (310, 200), (32, 16), 24),
+        "drow_chain_ladder": ((940, 820), (180, 380), (16, 48), 26),
+        "drow_cocoon": ((1310, 820), (200, 310), (16, 32), 26),
+        "drow_web_cluster": ((1660, 820), (310, 310), (32, 32), 28),
+        "drow_back_house_lit": ((760, 1260), (410, 310), (48, 32), 30),
+        "drow_back_house_dark": ((1260, 1260), (410, 310), (48, 32), 28),
+    }
+    if source is not None and prop_id in crop_specs:
+        center, crop_size, out_size, colors = crop_specs[prop_id]
+        prop = _crop_pixelized_dark_board(source, center, crop_size, out_size, colors)
+        prop.save(PROP_DIR / f"{prop_id}.png")
+        return prop
+
+    img = Image.new("RGBA", prop_sizes[prop_id], (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    outline = (18, 16, 38, 255)
+    silk = (98, 71, 155, 230)
+    silk_hi = (218, 188, 255, 240)
+    cyan = (85, 214, 210, 255)
+    glow = (182, 255, 236, 255)
+    purple = (160, 112, 220, 255)
+    stone = (36, 42, 82, 255)
+    stone_hi = (72, 65, 138, 255)
+    if prop_id == "drow_spider_totem":
+        rect(d, 10, 36, 12, 11, outline)
+        rect(d, 12, 37, 8, 9, stone)
+        rect(d, 8, 26, 16, 12, outline)
+        rect(d, 10, 27, 12, 10, stone_hi)
+        d.ellipse((6, 6, 26, 26), fill=outline)
+        d.ellipse((8, 8, 24, 24), fill=stone_hi)
+        for angle_pair in [(4, 28), (28, 4)]:
+            d.line((16, 16, angle_pair[0], angle_pair[1]), fill=purple, width=2)
+        px(img, 16, 16, cyan)
+        for lx, ly in [(8, 32), (24, 32)]:
+            px(img, lx, ly, cyan)
+    elif prop_id == "drow_spectral_torch":
+        rect(d, 7, 14, 2, 16, outline)
+        rect(d, 8, 15, 1, 14, stone)
+        rect(d, 4, 9, 8, 6, outline)
+        rect(d, 5, 10, 6, 4, stone_hi)
+        d.polygon([(8, 1), (13, 8), (8, 13), (3, 8)], fill=(36, 68, 155, 255))
+        d.polygon([(8, 3), (11, 8), (8, 12), (5, 8)], fill=cyan)
+        px(img, 8, 5, glow)
+    elif prop_id == "drow_silk_curtain":
+        rect(d, 2, 1, 28, 3, outline)
+        rect(d, 4, 4, 24, 40, silk)
+        for cx in (7, 14, 21):
+            d.line((cx, 4, cx - 3, 47), fill=(45, 36, 92, 230), width=1)
+            d.line((cx + 2, 4, cx + 4, 44), fill=silk_hi, width=1)
+        d.polygon([(4, 44), (10, 47), (16, 43), (22, 47), (28, 44)], fill=(28, 22, 58, 230))
+        for tx in (8, 22):
+            px(img, tx, 2, silk_hi)
+    elif prop_id == "drow_bookshelf":
+        rect(d, 2, 1, 44, 45, outline)
+        rect(d, 4, 2, 40, 43, stone)
+        for shelf_y in (14, 28, 42):
+            rect(d, 2, shelf_y, 44, 2, outline)
+        for col_x in (4, 18, 32):
+            for row_y in (4, 18, 32):
+                book_colors = [(98, 71, 155), (45, 63, 130), (160, 112, 220), (36, 42, 82)]
+                bc = book_colors[(col_x + row_y) % 4]
+                rect(d, col_x, row_y, 12, 8, (bc[0], bc[1], bc[2], 255))
+                px(img, col_x + 10, row_y + 4, cyan)
+    elif prop_id == "drow_rift_crystal":
+        rect(d, 5, 20, 6, 10, outline)
+        rect(d, 6, 21, 4, 9, stone_hi)
+        d.polygon([(8, 1), (14, 10), (11, 22), (5, 22), (2, 10)], fill=outline)
+        d.polygon([(8, 2), (13, 10), (10, 21), (6, 21), (3, 10)], fill=(45, 63, 130, 255))
+        d.line((8, 2, 8, 21), fill=cyan, width=1)
+        d.line((4, 10, 12, 10), fill=(112, 206, 177, 200), width=1)
+        px(img, 10, 5, glow)
+        px(img, 5, 14, cyan)
+    elif prop_id == "drow_wall_map":
+        rect(d, 2, 2, 44, 28, outline)
+        rect(d, 4, 3, 40, 26, (42, 38, 55, 255))
+        d.line((6, 8, 18, 12, 28, 7, 40, 14), fill=(85, 100, 130, 200), width=1)
+        d.line((8, 16, 20, 20, 34, 16), fill=(72, 88, 112, 190), width=1)
+        for mx, my in [(12, 10), (25, 14), (36, 9)]:
+            px(img, mx, my, cyan)
+        rect(d, 6, 24, 4, 4, (112, 206, 177, 220))
+        rect(d, 36, 4, 4, 4, (160, 112, 220, 220))
+    elif prop_id == "drow_weapon_rack":
+        rect(d, 3, 5, 26, 24, outline)
+        rect(d, 5, 6, 22, 22, stone)
+        d.line((5, 18, 27, 18), fill=outline, width=2)
+        for sx in (8, 14, 20):
+            d.line((sx, 7, sx + 2, 17), fill=(160, 112, 220, 255), width=2)
+            d.line((sx + 1, 7, sx - 1, 16), fill=stone_hi, width=1)
+            px(img, sx + 1, 6, silk_hi)
+        rect(d, 2, 27, 28, 4, outline)
+        rect(d, 4, 28, 24, 2, stone_hi)
+    elif prop_id == "drow_iron_railing":
+        rect(d, 1, 2, 30, 12, outline)
+        rect(d, 2, 3, 28, 3, (62, 55, 119, 255))
+        for rx in (4, 10, 16, 22, 28):
+            rect(d, rx, 6, 2, 7, outline)
+            rect(d, rx + 1, 7, 1, 5, stone_hi)
+        px(img, 16, 3, cyan)
+    elif prop_id == "drow_chain_ladder":
+        for ly in range(2, 44, 6):
+            rect(d, 5, ly, 6, 4, outline)
+            rect(d, 6, ly + 1, 4, 2, stone_hi)
+        d.line((7, 1, 7, 46), fill=(72, 65, 138, 255), width=2)
+        d.line((9, 1, 9, 46), fill=(36, 32, 70, 255), width=1)
+        for cy in range(4, 45, 6):
+            px(img, 8, cy, cyan)
+    elif prop_id == "drow_cocoon":
+        d.ellipse((3, 3, 13, 27), fill=outline)
+        d.ellipse((4, 4, 12, 26), fill=(68, 48, 94, 255))
+        for wy in range(5, 26, 4):
+            d.line((4, wy, 12, wy + 2), fill=(98, 71, 155, 180), width=1)
+        for wy in range(7, 24, 4):
+            d.line((12, wy, 4, wy + 2), fill=(45, 36, 92, 160), width=1)
+        px(img, 8, 14, silk_hi)
+        rect(d, 5, 1, 6, 3, outline)
+        d.line((8, 1, 8, 3), fill=(72, 65, 138, 255), width=1)
+    elif prop_id == "drow_web_cluster":
+        for wx, wy in [(16, 16), (16, 16)]:
+            d.line((wx, wy, 2, 2), fill=(218, 188, 255, 180), width=1)
+            d.line((wx, wy, 30, 2), fill=(218, 188, 255, 180), width=1)
+            d.line((wx, wy, 2, 30), fill=(160, 112, 220, 160), width=1)
+            d.line((wx, wy, 30, 30), fill=(160, 112, 220, 160), width=1)
+            d.line((wx, wy, 16, 1), fill=(218, 188, 255, 170), width=1)
+            d.line((wx, wy, 1, 16), fill=(160, 112, 220, 150), width=1)
+            d.line((wx, wy, 31, 16), fill=(160, 112, 220, 150), width=1)
+            d.line((wx, wy, 16, 31), fill=(218, 188, 255, 170), width=1)
+        for ring_r in (5, 10, 15):
+            for seg in range(8):
+                import math
+                a1 = seg * math.pi / 4
+                a2 = (seg + 1) * math.pi / 4
+                x1 = int(16 + ring_r * math.cos(a1))
+                y1 = int(16 + ring_r * math.sin(a1))
+                x2 = int(16 + ring_r * math.cos(a2))
+                y2 = int(16 + ring_r * math.sin(a2))
+                d.line((x1, y1, x2, y2), fill=(98, 71, 155, 140 + ring_r * 5), width=1)
+        px(img, 16, 16, silk_hi)
+    elif prop_id in ("drow_back_house_lit", "drow_back_house_dark"):
+        alpha = 188 if prop_id == "drow_back_house_lit" else 148
+        light_alpha = 218 if prop_id == "drow_back_house_lit" else 0
+        rect(d, 3, 12, 42, 18, (22, 24, 52, alpha))
+        rect(d, 5, 14, 38, 16, (44, 48, 88, alpha))
+        d.polygon([(2, 13), (24, 2), (46, 13)], fill=(18, 20, 44, alpha))
+        d.polygon([(7, 13), (24, 5), (41, 13)], fill=(62, 55, 119, alpha))
+        rect(d, 19, 18, 10, 12, (14, 16, 38, alpha))
+        for wx in (9, 34):
+            rect(d, wx, 18, 5, 7, (12, 14, 34, alpha))
+            if light_alpha > 0:
+                rect(d, wx + 1, 19, 3, 5, (85, 214, 210, light_alpha))
+    img.save(PROP_DIR / f"{prop_id}.png")
+    return img
+
+
+def make_drow_settlement_assets() -> None:
+    source = Image.open(AI_DROW_SETTLEMENT_REFERENCE).convert("RGBA") if AI_DROW_SETTLEMENT_REFERENCE.exists() else None
+    backgrounds = [make_drow_background(bg_id) for bg_id in DROW_SETTLEMENT_BACKGROUND_IDS]
+    props = [make_drow_settlement_prop(prop_id, source) for prop_id in DROW_SETTLEMENT_PROP_IDS]
+    columns = 4
+    all_assets = backgrounds + props
+    rows = max(1, (len(all_assets) + columns - 1) // columns)
+    atlas = Image.new("RGBA", (16 * columns, 16 * rows), (0, 0, 0, 0))
+    for index, asset in enumerate(all_assets):
+        preview_cell = asset.resize((16, 16), Image.Resampling.NEAREST)
+        atlas.alpha_composite(preview_cell, ((index % columns) * 16, (index // columns) * 16))
+    atlas.save(PREVIEW_DIR / "drow_settlement_kit.png")
+    make_preview(atlas, PREVIEW_DIR / "drow_settlement_kit_preview.png", scale=8, grid=(16, 16))
 
 
 def make_goblin_tile(tile_id: str) -> Image.Image:
@@ -2585,6 +2848,7 @@ def make_tiles() -> None:
         atlas.save(TILE_DIR / "deepbound_tile_samples.png")
         make_preview(atlas, PREVIEW_DIR / "deepbound_tile_samples_preview.png", scale=8, grid=(16, 16))
         make_drow_village_assets()
+        make_drow_settlement_assets()
         make_goblin_village_assets()
         make_dwarf_fortress_assets()
         make_dwarf_settlement_assets()
@@ -2622,6 +2886,7 @@ def make_tiles() -> None:
     atlas.save(TILE_DIR / "deepbound_tile_samples.png")
     make_preview(atlas, PREVIEW_DIR / "deepbound_tile_samples_preview.png", scale=8, grid=(16, 16))
     make_drow_village_assets()
+    make_drow_settlement_assets()
     make_goblin_village_assets()
     make_dwarf_fortress_assets()
     make_dwarf_settlement_assets()

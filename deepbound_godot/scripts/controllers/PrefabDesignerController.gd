@@ -20,6 +20,7 @@ const BUILTIN_TEMPLATE_PATHS := {
 	"Goblin Village": "res://data/templates/goblin_village_full.json",
 	"Dwarf Fortress": "res://data/templates/dwarf_fortress_full.json",
 	"Dwarf Settlement": "res://data/templates/dwarf_settlement_full.json",
+	"Drow Village": "res://data/templates/drow_village_full.json",
 }
 const LAYERS := ["backgrounds", "foreground", "props", "spawns"]
 const TOOL_PENCIL := "pencil"

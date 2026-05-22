@@ -191,7 +191,9 @@ func _draw_god_mode_button() -> void:
 	if font == null:
 		return
 	var label := "GOD MODE  ON" if on else "GOD MODE  OFF"
-	draw_string(font, Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y + 18.0),
+	# pos.x must be the LEFT edge of the centering window; width covers the
+	# full button so draw_string centres the text inside the rect correctly.
+	draw_string(font, Vector2(rect.position.x, rect.position.y + 18.0),
 		label, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 11, text_col)
 
 func _panel(rect: Rect2) -> void:

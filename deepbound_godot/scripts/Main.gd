@@ -13,6 +13,8 @@ const ChestController = preload("res://scripts/controllers/ChestController.gd")
 const DroppedItemController = preload("res://scripts/controllers/DroppedItemController.gd")
 const SaveGameSystem = preload("res://scripts/systems/SaveGameSystem.gd")
 const EnemyScene = preload("res://scenes/Enemy.tscn")
+const DebugSystem = preload("res://scripts/systems/DebugSystem.gd")
+const TerminalSystem = preload("res://scripts/systems/TerminalSystem.gd")
 
 const TEST_CHEST_OFFSET := Vector2(64, -16)
 const TEST_CHEST_OPEN_DISTANCE := 46.0
@@ -86,6 +88,8 @@ func _ready() -> void:
 		hud.hotbar_slot_selected.connect(_select_hotbar_index)
 	if hud.has_signal("drag_state_changed") and not hud.drag_state_changed.is_connected(_set_hud_drag_active):
 		hud.drag_state_changed.connect(_set_hud_drag_active)
+	if hud.has_signal("terminal_command") and not hud.terminal_command.is_connected(_on_terminal_command):
+		hud.terminal_command.connect(_on_terminal_command)
 	world.player = player
 	world.container_parent = props_node
 	if world.has_signal("chest_broken") and not world.chest_broken.is_connected(_on_chest_broken):
@@ -106,6 +110,20 @@ func _ready() -> void:
 			_maybe_spawn_nearby_structure_encounters(true)
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Backtick (`) toggles the terminal console regardless of other state.
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_QUOTELEFT:
+		if hud != null and hud.has_method("toggle_terminal"):
+			hud.toggle_terminal()
+		get_viewport().set_input_as_handled()
+		return
+	# When terminal is open: ESC closes it; all other events are swallowed so
+	# the game does not act on keyboard/mouse input while the player is typing.
+	if TerminalSystem.is_open:
+		if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+			if hud != null and hud.has_method("close_terminal"):
+				hud.close_terminal()
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("pause_menu"):
 		_toggle_pause_menu()
 		get_viewport().set_input_as_handled()
@@ -137,6 +155,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	if pause_menu_open:
+		return
+	# Freeze all game input processing while the debug terminal is open.
+	# Player movement is blocked via controls_locked (set below).
+	if TerminalSystem.is_open:
+		_set_player_drag_lock(true)
 		return
 	structure_spawn_check_elapsed += delta
 	hud_light_refresh_elapsed += delta
@@ -275,8 +298,10 @@ func _maybe_spawn_nearby_structure_encounters(force := false) -> void:
 	_spawn_nearby_structure_encounters(player_tile)
 
 func _spawn_nearby_structure_encounters(player_tile: Vector2i) -> void:
-	if player_tile.y + STRUCTURE_SPAWN_RADIUS_TILES < StructureGenerator.BAND1_MIN_Y or player_tile.y - STRUCTURE_SPAWN_RADIUS_TILES > StructureGenerator.BAND1_MAX_Y:
-		return
+	# NOTE: no per-band Y guard here — structures exist in every band; the
+	# get_structure_spawns_near query is already radius-bounded, so removing
+	# the old BAND1_MIN_Y/BAND1_MAX_Y early-return allows goblin villages (and
+	# all future structures) to spawn enemies in every band, not just Band 1.
 	var spawns: Array[Dictionary] = world.get_structure_spawns_near(player_tile, STRUCTURE_SPAWN_RADIUS_TILES) if world.has_method("get_structure_spawns_near") else StructureGenerator.get_structure_spawns_near(world.store.seed, player_tile, STRUCTURE_SPAWN_RADIUS_TILES)
 	var structure_ids := {}
 	for spawn in spawns:
@@ -588,6 +613,90 @@ func _is_item_drag_active() -> bool:
 func _set_player_drag_lock(locked: bool) -> void:
 	if is_instance_valid(player) and player.has_method("set_controls_locked"):
 		player.set_controls_locked(locked)
+
+## ── Terminal console command handler ─────────────────────────────────────────
+
+func _on_terminal_command(cmd: String) -> void:
+	var parts := cmd.strip_edges().to_lower().split(" ", false)
+	if parts.is_empty():
+		return
+	var verb: String = parts[0]
+	match verb:
+		"god":
+			DebugSystem.toggle_god_mode()
+			TerminalSystem.push_output("[OK] God mode %s" % ("ON" if DebugSystem.god_mode_enabled else "OFF"))
+			if hud != null:
+				hud.queue_redraw()
+		"heal":
+			if is_instance_valid(player):
+				player.heal(player.max_health)
+				TerminalSystem.push_output("[OK] Player healed to full HP (%d)" % player.max_health)
+		"tp":
+			if parts.size() < 2:
+				TerminalSystem.push_output("[ERR] Usage: tp <band>  (1, 2, or 3)")
+			else:
+				var band_num := int(parts[1])
+				match band_num:
+					1:
+						_teleport_to_band(0)
+						TerminalSystem.push_output("[OK] Teleported to Band 1 (Standard Caverns)")
+					2:
+						_teleport_to_band(390)
+						TerminalSystem.push_output("[OK] Teleported to Band 2 (Colossal Ant Chambers)")
+					3:
+						_teleport_to_band(780)
+						TerminalSystem.push_output("[OK] Teleported to Band 3 (Buried Pyramids)")
+					_:
+						TerminalSystem.push_output("[ERR] Unknown band: %d  (use 1, 2, or 3)" % band_num)
+		"give":
+			if parts.size() < 2:
+				TerminalSystem.push_output("[ERR] Usage: give <item_id> [count]")
+			else:
+				var item_id: String = parts[1]
+				var count := int(parts[2]) if parts.size() >= 3 else 1
+				count = maxi(1, count)
+				if is_instance_valid(player) and player.inventory != null:
+					var remaining: int = player.inventory.add_item(item_id, count)
+					var added := count - remaining
+					if added > 0:
+						TerminalSystem.push_output("[OK] Added %d × %s" % [added, item_id])
+					else:
+						TerminalSystem.push_output("[ERR] Inventory full or unknown item: %s" % item_id)
+				else:
+					TerminalSystem.push_output("[ERR] Player inventory not available")
+		"spawn":
+			if parts.size() < 2:
+				TerminalSystem.push_output("[ERR] Usage: spawn <enemy_id>")
+			else:
+				var enemy_id: String = parts[1]
+				if is_instance_valid(player):
+					_spawn_enemy(enemy_id, player.global_position + Vector2(96, 0))
+					TerminalSystem.push_output("[OK] Spawned %s" % enemy_id)
+				else:
+					TerminalSystem.push_output("[ERR] Player not available")
+		"kill":
+			var count_killed := enemies_node.get_child_count() if enemies_node != null else 0
+			if enemies_node != null:
+				for child in enemies_node.get_children():
+					child.queue_free()
+			TerminalSystem.push_output("[OK] Removed %d enemies" % count_killed)
+		"clear":
+			TerminalSystem.clear_history()
+		"help":
+			TerminalSystem.push_output("  god              — toggle god mode (invincible + fly)")
+			TerminalSystem.push_output("  heal             — restore player to full HP")
+			TerminalSystem.push_output("  tp <1|2|3>       — teleport to band number")
+			TerminalSystem.push_output("  give <id> [n]    — add n of item to inventory")
+			TerminalSystem.push_output("  spawn <enemy_id> — spawn enemy near player")
+			TerminalSystem.push_output("  kill             — remove all active enemies")
+			TerminalSystem.push_output("  clear            — clear this console")
+			TerminalSystem.push_output("  help             — show this list")
+		_:
+			TerminalSystem.push_output("[ERR] Unknown command: %s   (type help for list)" % verb)
+	if hud != null:
+		hud.queue_redraw()
+
+## ─────────────────────────────────────────────────────────────────────────────
 
 func save_game() -> Dictionary:
 	return SaveGameSystem.save_game(self)

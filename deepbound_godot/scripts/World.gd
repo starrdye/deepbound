@@ -473,6 +473,7 @@ func find_mining_target_info(origin: Vector2, aim: Vector2, reach_tiles := BLOCK
 			if not BackgroundCatalog.is_empty(background_id):
 				background_tile = tile
 				background_id_at_target = background_id
+				break  # stop at the NEAREST background tile, not the furthest
 		distance += 4.0
 	if background_tile.x != 999999:
 		return {"found": true, "tile": background_tile, "layer": "background", "id": background_id_at_target}

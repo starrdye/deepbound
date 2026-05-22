@@ -6,9 +6,13 @@ const InventorySystem = preload("res://scripts/systems/InventorySystem.gd")
 const CollisionSystem = preload("res://scripts/systems/CollisionSystem.gd")
 const MiningSystem = preload("res://scripts/systems/MiningSystem.gd")
 const HeartSystem = preload("res://scripts/systems/HeartSystem.gd")
+const DebugSystem = preload("res://scripts/systems/DebugSystem.gd")
 
 const TILE_SIZE := 16
 const SPRITE_FRAME_SIZE := Vector2i(32, 32)
+const GOD_MODE_FLY_SPEED := 320.0
+const GOD_MODE_FLY_ACCEL := 1800.0
+const GOD_MODE_TINT := Color8(255, 214, 80, 210)
 const SPRITE_FRAMES_PER_MOVE := 8
 const PLAYER_COLLIDER := {"width": 14.0, "height": 28.0}
 const GRAVITY := 1900.0
@@ -83,6 +87,7 @@ var selected_hotbar_item_id := ""
 var held_item_texture: Texture2D
 var weapon_ready_texture: Texture2D
 var controls_locked := false
+var _was_god_mode := false
 
 @onready var sprite: Sprite2D = $Sprite2D
 var weapon_sprite: Sprite2D
@@ -144,6 +149,18 @@ func _ensure_held_item_sprite() -> Sprite2D:
 func _physics_process(delta: float) -> void:
 	if world == null:
 		return
+	var god_mode := DebugSystem.god_mode_enabled
+	# On mode transition: zero velocity so no carry-over momentum.
+	if god_mode != _was_god_mode:
+		velocity = Vector2.ZERO
+		_was_god_mode = god_mode
+	sprite.modulate = GOD_MODE_TINT if god_mode else Color.WHITE
+	if god_mode:
+		_physics_process_god_mode(delta)
+	else:
+		_physics_process_normal(delta)
+
+func _physics_process_normal(delta: float) -> void:
 	var input_axis := 0.0 if controls_locked else Input.get_axis("move_left", "move_right")
 	if input_axis != 0.0:
 		velocity.x = move_toward(velocity.x, input_axis * MAX_SPEED, MOVE_ACCEL * delta)
@@ -162,6 +179,21 @@ func _physics_process(delta: float) -> void:
 	_update_mining(delta)
 	_update_animation(delta, input_axis)
 
+## God-mode physics: free flight in all directions via arrow / WASD, no
+## gravity, no collision. HP is blocked in damage(). Drill is instant.
+func _physics_process_god_mode(delta: float) -> void:
+	var input_x := 0.0 if controls_locked else Input.get_axis("move_left", "move_right")
+	# move_up maps to W/UP (-1 = move up in screen space = negative Y).
+	var input_y := 0.0 if controls_locked else Input.get_axis("move_up", "move_down")
+	velocity.x = move_toward(velocity.x, input_x * GOD_MODE_FLY_SPEED, GOD_MODE_FLY_ACCEL * delta)
+	velocity.y = move_toward(velocity.y, input_y * GOD_MODE_FLY_SPEED, GOD_MODE_FLY_ACCEL * delta)
+	global_position += velocity * delta
+	on_ground = false
+	if absf(velocity.x) > 3.0:
+		facing = -1 if velocity.x < 0.0 else 1
+	_update_mining(delta)
+	_update_animation(delta, input_x)
+
 func _update_mining(delta: float) -> void:
 	var origin := global_position + Vector2(0, -14)
 	var aim := get_global_mouse_position() - origin
@@ -177,10 +209,12 @@ func _update_mining(delta: float) -> void:
 		drill_heat = minf(1.0, drill_heat + 0.16 * delta) if use_drill_speed_logic else 0.0
 		if target_tile != NO_TARGET_TILE:
 			var effective_drill_heat := drill_heat if use_drill_speed_logic else 0.0
+			# God mode: pass a delta large enough to exceed any tile hardness instantly.
+			var mine_delta := 9999.0 if DebugSystem.god_mode_enabled else delta
 			if world.has_method("find_mining_target_info"):
-				last_mining_result = world.mine_at(target_tile, inventory, delta, effective_drill_heat, target_layer, selected_hotbar_item_id)
+				last_mining_result = world.mine_at(target_tile, inventory, mine_delta, effective_drill_heat, target_layer, selected_hotbar_item_id)
 			else:
-				last_mining_result = world.mine_at(target_tile, inventory, delta, effective_drill_heat)
+				last_mining_result = world.mine_at(target_tile, inventory, mine_delta, effective_drill_heat)
 			if bool(last_mining_result.get("broke", false)):
 				_invalidate_mining_target_cache()
 	else:
@@ -517,6 +551,8 @@ func start_weapon_swing(aim := Vector2.ZERO) -> void:
 		weapon_aim = Vector2(float(facing), 0.0)
 
 func damage(amount: int, impulse: Vector2) -> void:
+	if DebugSystem.god_mode_enabled:
+		return
 	var now := Time.get_ticks_msec() / 1000.0
 	if now < invulnerable_until:
 		return

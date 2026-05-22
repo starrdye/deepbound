@@ -3,6 +3,7 @@ class_name HudController
 
 const TextureFactory = preload("res://scripts/factories/TextureFactory.gd")
 const HeartSystem = preload("res://scripts/systems/HeartSystem.gd")
+const DebugSystem = preload("res://scripts/systems/DebugSystem.gd")
 
 signal world_drop_requested(stack: Dictionary)
 signal hotbar_slot_selected(index: int)
@@ -10,6 +11,10 @@ signal drag_state_changed(active: bool)
 
 const SLOT_SIZE := 36.0
 const SLOT_GAP := 4.0
+const GOD_BTN_W := 160.0
+const GOD_BTN_H := 26.0
+const GOD_BTN_MARGIN_RIGHT := 12.0
+const GOD_BTN_TOP := 62.0
 const PANEL_PADDING := 12.0
 const PANEL_HEADER := 28.0
 const PLAYER_COLS := 6
@@ -144,6 +149,7 @@ func _draw() -> void:
 	_panel(Rect2(12, 10, 260, 58))
 	_panel(Rect2(12, 638, 320, 58))
 	_panel(Rect2(size.x - 180, 10, 160, 44))
+	_draw_god_mode_button()
 	_draw_hearts(Vector2(20, 16))
 	_draw_hotbar()
 	if inventory_open:
@@ -168,6 +174,26 @@ func _draw_hearts(origin: Vector2) -> void:
 			var fallback_color := Color8(201, 78, 78) if frame == 0 else Color8(82, 36, 46)
 			draw_rect(target, fallback_color, true)
 
+func _god_mode_button_rect() -> Rect2:
+	var vw := get_viewport_rect().size.x
+	return Rect2(vw - GOD_BTN_W - GOD_BTN_MARGIN_RIGHT, GOD_BTN_TOP, GOD_BTN_W, GOD_BTN_H)
+
+func _draw_god_mode_button() -> void:
+	var on := DebugSystem.god_mode_enabled
+	var rect := _god_mode_button_rect()
+	# Background: bright gold when on, dark panel when off.
+	var bg := Color8(200, 158, 12, 220) if on else Color(0.05, 0.06, 0.09, 0.82)
+	var border := Color8(255, 214, 80) if on else Color8(91, 100, 107)
+	var text_col := Color8(18, 14, 4) if on else Color8(244, 231, 192)
+	draw_rect(rect, bg, true)
+	draw_rect(rect, border, false, 2.0)
+	var font := get_theme_default_font()
+	if font == null:
+		return
+	var label := "GOD MODE  ON" if on else "GOD MODE  OFF"
+	draw_string(font, Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y + 18.0),
+		label, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 11, text_col)
+
 func _panel(rect: Rect2) -> void:
 	draw_rect(rect, Color(0.05, 0.06, 0.09, 0.78), true)
 	draw_rect(rect, Color8(91, 100, 107), false, 2.0)
@@ -184,6 +210,11 @@ func _gui_input(event: InputEvent) -> void:
 					queue_redraw()
 					return
 		if event.pressed:
+			if _god_mode_button_rect().has_point(event.position):
+				DebugSystem.toggle_god_mode()
+				queue_redraw()
+				accept_event()
+				return
 			var hotbar_index := _hotbar_slot_at(event.position)
 			if hotbar_index >= 0:
 				hotbar_slot_selected.emit(hotbar_index)

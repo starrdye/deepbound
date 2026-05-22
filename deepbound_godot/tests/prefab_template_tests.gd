@@ -361,7 +361,7 @@ func _test_template_band_precheck_covers_multiple_depths() -> void:
 	_assert(PrefabTemplateRegistry.has_enabled_template_near_rect(Rect2i(Vector2i(0, 120), Vector2i(64, 64))), "template precheck should include Band 1 goblin villages")
 	_assert(PrefabTemplateRegistry.has_enabled_template_near_rect(Rect2i(Vector2i(0, 520), Vector2i(64, 64))), "template precheck should include Band 2 dwarf fortresses")
 	_assert(not PrefabTemplateRegistry.has_enabled_template_near_rect(Rect2i(Vector2i(0, -512), Vector2i(64, 64))), "template precheck should skip far-above-surface camera windows")
-	_assert(not PrefabTemplateRegistry.has_enabled_template_near_rect(Rect2i(Vector2i(0, 1024), Vector2i(64, 64))), "template precheck should skip bands with no enabled templates")
+	_assert(not PrefabTemplateRegistry.has_enabled_template_near_rect(Rect2i(Vector2i(0, 920), Vector2i(64, 64))), "template precheck should skip bands with no enabled templates")
 
 func _find_first_template_structure(seed: int) -> Dictionary:
 	for chunk_y in range(0, 12):

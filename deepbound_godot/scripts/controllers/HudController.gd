@@ -24,13 +24,7 @@ const CONTAINER_COLS := 6
 const HOTBAR_SIZE := 6
 const HOTBAR_MARGIN_BOTTOM := 14.0
 
-## Terminal console layout constants
-const TERMINAL_H := 200.0        # total panel height (above hotbar)
-const TERMINAL_MARGIN := 12.0    # left/right padding inside panel
-const TERMINAL_LINE_H := 16.0    # vertical spacing between history lines
-const TERMINAL_MAX_VISIBLE := 9  # how many history lines to show at once
-const TERMINAL_INPUT_H := 24.0   # height of the LineEdit row
-const TERMINAL_FONT_SIZE := 11   # font size for all terminal text
+const TERMINAL_H := 32.0  # height of the plain grey input rectangle
 
 var health_label: Label
 var inventory_label: Label
@@ -61,7 +55,7 @@ func _ready() -> void:
 	inventory_label = _make_label(Vector2(20, 650))
 	hint_label = _make_label(Vector2(740, 650))
 	hint_label.text = ""
-	_build_terminal_line_edit()
+	_build_terminal()
 
 func open_inventory(player_inv) -> void:
 	player_inventory = player_inv
@@ -166,8 +160,6 @@ func _draw() -> void:
 	_draw_god_mode_button()
 	_draw_hearts(Vector2(20, 16))
 	_draw_hotbar()
-	if TerminalSystem.is_open:
-		_draw_terminal()
 	if inventory_open:
 		_draw_inventory_panel(_player_panel_rect(), "Inventory", player_inventory, PLAYER_COLS, "player")
 	if container_open:
@@ -190,58 +182,27 @@ func _draw_hearts(origin: Vector2) -> void:
 			var fallback_color := Color8(201, 78, 78) if frame == 0 else Color8(82, 36, 46)
 			draw_rect(target, fallback_color, true)
 
-## ── Terminal console ─────────────────────────────────────────────────────────
+## ── Terminal console (minimal — plain grey LineEdit rectangle) ───────────────
 
-func _build_terminal_line_edit() -> void:
+func _build_terminal() -> void:
+	## Create a plain LineEdit that sits just above the hotbar.
+	## Godot's default theme renders it as a grey rectangle — exactly what we want.
 	_terminal_line_edit = LineEdit.new()
 	_terminal_line_edit.visible = false
-	_terminal_line_edit.placeholder_text = "enter command — type  help  for list"
-	_terminal_line_edit.caret_blink = true
+	_terminal_line_edit.placeholder_text = "command  (help for list, ESC to close)"
 	_terminal_line_edit.mouse_filter = MOUSE_FILTER_STOP
-	# Dark styled background with a green-tinted border to look like a console
-	var style_normal := StyleBoxFlat.new()
-	style_normal.bg_color = Color(0.04, 0.07, 0.05, 0.96)
-	style_normal.border_color = Color8(70, 140, 90)
-	style_normal.set_border_width_all(1)
-	style_normal.content_margin_left = 8.0
-	style_normal.content_margin_right = 8.0
-	style_normal.content_margin_top = 4.0
-	style_normal.content_margin_bottom = 4.0
-	var style_focus := style_normal.duplicate() as StyleBoxFlat
-	style_focus.border_color = Color8(100, 200, 130)
-	style_focus.set_border_width_all(2)
-	_terminal_line_edit.add_theme_stylebox_override("normal", style_normal)
-	_terminal_line_edit.add_theme_stylebox_override("focus", style_focus)
-	_terminal_line_edit.add_theme_color_override("font_color", Color8(140, 230, 160))
-	_terminal_line_edit.add_theme_color_override("caret_color", Color8(140, 230, 160))
-	_terminal_line_edit.add_theme_color_override("font_placeholder_color", Color8(70, 110, 80))
-	_terminal_line_edit.add_theme_font_size_override("font_size", TERMINAL_FONT_SIZE)
 	_terminal_line_edit.text_submitted.connect(_on_terminal_submitted)
 	add_child(_terminal_line_edit)
 
-func _terminal_panel_y() -> float:
-	## Top edge of the terminal panel (sits directly above the hotbar).
-	var vsize := get_viewport_rect().size
-	return vsize.y - SLOT_SIZE - HOTBAR_MARGIN_BOTTOM - TERMINAL_H
-
-func _update_terminal_line_edit_rect() -> void:
-	if _terminal_line_edit == null:
-		return
-	var vsize := get_viewport_rect().size
-	var hotbar_top := vsize.y - SLOT_SIZE - HOTBAR_MARGIN_BOTTOM
-	# Position the LineEdit just above the hotbar, after a small margin
-	var le_y := hotbar_top - TERMINAL_INPUT_H - TERMINAL_MARGIN
-	# Leave room on the left for the ">" glyph drawn in _draw_terminal
-	_terminal_line_edit.position = Vector2(TERMINAL_MARGIN + 14.0, le_y)
-	_terminal_line_edit.size = Vector2(vsize.x - TERMINAL_MARGIN * 2.0 - 14.0, TERMINAL_INPUT_H)
-
 func open_terminal() -> void:
 	TerminalSystem.is_open = true
+	var vsize := get_viewport_rect().size
+	var y := vsize.y - SLOT_SIZE - HOTBAR_MARGIN_BOTTOM - TERMINAL_H - 6.0
+	_terminal_line_edit.position = Vector2(0.0, y)
+	_terminal_line_edit.size    = Vector2(vsize.x, TERMINAL_H)
 	_terminal_line_edit.visible = true
 	_terminal_line_edit.clear()
-	_update_terminal_line_edit_rect()
 	_terminal_line_edit.grab_focus()
-	queue_redraw()
 
 func close_terminal() -> void:
 	TerminalSystem.is_open = false
@@ -257,69 +218,8 @@ func toggle_terminal() -> void:
 
 func _on_terminal_submitted(text: String) -> void:
 	text = text.strip_edges()
-	if text.is_empty():
-		close_terminal()
-		return
-	TerminalSystem.push_output("> " + text)
 	terminal_command.emit(text)
-	_terminal_line_edit.clear()
-	# keep terminal open after a submit so the user can see the response
-	queue_redraw()
-
-func _draw_terminal() -> void:
-	var vsize := get_viewport_rect().size
-	var panel_y := _terminal_panel_y()
-	var panel_rect := Rect2(0.0, panel_y, vsize.x, TERMINAL_H)
-
-	# Background panel
-	draw_rect(panel_rect, Color(0.02, 0.04, 0.03, 0.93), true)
-	draw_rect(panel_rect, Color8(50, 110, 70, 220), false, 1.0)
-
-	var font := get_theme_default_font()
-	if font == null:
-		return
-
-	# Header bar
-	var header_rect := Rect2(0.0, panel_y, vsize.x, 18.0)
-	draw_rect(header_rect, Color(0.04, 0.09, 0.06, 0.98), true)
-	draw_string(font,
-		Vector2(TERMINAL_MARGIN, panel_y + 13.0),
-		"DEEPBOUND CONSOLE    (backtick ` to close)",
-		HORIZONTAL_ALIGNMENT_LEFT, -1.0, 9, Color8(80, 160, 100, 200))
-
-	# History lines — most-recent fills from bottom toward the header
-	var history: Array[String] = TerminalSystem.history
-	var visible_start := maxi(0, history.size() - TERMINAL_MAX_VISIBLE)
-	var line_y := panel_y + 22.0
-	for i in range(visible_start, history.size()):
-		var line: String = history[i]
-		var col: Color
-		if line.begins_with("> "):
-			col = Color8(120, 220, 145)  # command echo — bright green
-		elif line.begins_with("[ERR]"):
-			col = Color8(230, 90, 75)    # error — red
-		elif line.begins_with("[OK]"):
-			col = Color8(110, 210, 135)  # success — green
-		else:
-			col = Color8(200, 195, 185)  # plain output — warm white
-		draw_string(font,
-			Vector2(TERMINAL_MARGIN, line_y),
-			line, HORIZONTAL_ALIGNMENT_LEFT,
-			vsize.x - TERMINAL_MARGIN * 2.0, TERMINAL_FONT_SIZE, col)
-		line_y += TERMINAL_LINE_H
-
-	# Divider line between history and input field
-	var hotbar_top := vsize.y - SLOT_SIZE - HOTBAR_MARGIN_BOTTOM
-	var divider_y := hotbar_top - TERMINAL_INPUT_H - TERMINAL_MARGIN * 1.5
-	draw_line(
-		Vector2(TERMINAL_MARGIN, divider_y),
-		Vector2(vsize.x - TERMINAL_MARGIN, divider_y),
-		Color8(50, 110, 70, 160), 1.0)
-
-	# ">" prompt glyph to the left of the LineEdit
-	draw_string(font,
-		Vector2(TERMINAL_MARGIN, hotbar_top - TERMINAL_MARGIN - 5.0),
-		">", HORIZONTAL_ALIGNMENT_LEFT, -1.0, TERMINAL_FONT_SIZE, Color8(100, 210, 130))
+	close_terminal()
 
 ## ─────────────────────────────────────────────────────────────────────────────
 

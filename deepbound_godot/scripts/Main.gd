@@ -156,10 +156,13 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	if pause_menu_open:
 		return
-	# Freeze all game input processing while the debug terminal is open.
-	# Player movement is blocked via controls_locked (set below).
+	# Freeze all game input/action processing while the debug terminal is open,
+	# but still refresh the HUD so HP/depth stay accurate (enemies can still hit
+	# the player while they type).
 	if TerminalSystem.is_open:
 		_set_player_drag_lock(true)
+		hud_light_refresh_elapsed += delta
+		_update_hud()
 		return
 	structure_spawn_check_elapsed += delta
 	hud_light_refresh_elapsed += delta

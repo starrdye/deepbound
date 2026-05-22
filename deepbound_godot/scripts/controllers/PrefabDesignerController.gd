@@ -147,8 +147,10 @@ class DesignerCanvasView:
 				var enemy_id := String(entry.get("enemy_id", "cave_skitter"))
 				var enemy_def := EnemyCatalog.get_enemy(enemy_id)
 				# Use the enemy's catalogue color so different enemy types are visually distinct.
-				var base_col: Color = Color(enemy_def.get("color", Color8(200, 50, 50)))
-				base_col.a = 0.72
+				# Color(c: Color, a: float) is the safe documented form — avoids the missing
+				# single-argument Color(Color) constructor in Godot 4.
+				var raw_color: Color = enemy_def.get("color", Color8(200, 50, 50))
+				var base_col := Color(raw_color, 0.72)
 				var rect := tile_rect(tile).grow(-1)
 				draw_rect(rect, base_col, true)
 				draw_rect(rect, Color8(255, 224, 161), false, maxf(1.0, zoom))
@@ -288,10 +290,10 @@ func set_active_tool(tool_name: String) -> void:
 func select_palette_asset(entry: Dictionary) -> void:
 	selected_asset = entry.duplicate(true)
 	var new_layer := String(entry.get("layer", active_layer))
+	# Use set_active_layer() so the OptionButton AND palette both stay in sync
+	# when clicking an entry that belongs to a different layer.
 	if new_layer != active_layer:
-		active_layer = new_layer
-		if layer_option != null and layer_option.selected != LAYERS.find(active_layer):
-			layer_option.selected = LAYERS.find(active_layer)
+		set_active_layer(new_layer)
 	_sync_prop_controls_from_selection()
 
 func fit_view_to_template() -> void:

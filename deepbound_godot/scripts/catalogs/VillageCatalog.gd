@@ -23,6 +23,28 @@ const DROW_PROP_IDS := [
 	"drow_web_bridge"
 ]
 
+const DROW_SETTLEMENT_BACKGROUND_IDS := [
+	"drow_carved_background",
+	"drow_webbed_background",
+	"drow_scriptuarium_background",
+]
+
+const DROW_SETTLEMENT_PROP_IDS := [
+	"drow_spider_totem",
+	"drow_spectral_torch",
+	"drow_silk_curtain",
+	"drow_bookshelf",
+	"drow_rift_crystal",
+	"drow_wall_map",
+	"drow_weapon_rack",
+	"drow_iron_railing",
+	"drow_chain_ladder",
+	"drow_cocoon",
+	"drow_web_cluster",
+	"drow_back_house_lit",
+	"drow_back_house_dark",
+]
+
 const GOBLIN_TILE_IDS := [
 	"goblin_timber_wall",
 	"goblin_packed_floor",
@@ -504,6 +526,19 @@ const DROW_VILLAGE := {
 		"Place moon_shrine deeper or higher than the plaza to make it feel sacred.",
 		"Place watch_spire vertically near a ledge or route transition."
 	]
+}
+
+const DROW_VILLAGE_FULL := {
+	"id": "drow_village_full",
+	"name": "Drow Village Full",
+	"band": "drow_enclaves",
+	"tile_y_range": [1152, 1535],
+	"template_path": "res://data/templates/drow_village_full.json",
+	"required_tiles": DROW_TILE_IDS,
+	"required_backgrounds": DROW_SETTLEMENT_BACKGROUND_IDS,
+	"required_props": DROW_SETTLEMENT_PROP_IDS,
+	"rooms": ["spider_court", "shadow_respite", "scriptuarium_tower", "arena_pit", "trap_shaft"],
+	"primary_spawn": "drow_matriarch",
 }
 
 const GOBLIN_VILLAGE := {

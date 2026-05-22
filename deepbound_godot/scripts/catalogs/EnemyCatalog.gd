@@ -11,7 +11,9 @@ const ENEMIES := {
 	"dwarf_guard": {"name": "Dwarf Guard", "band": "colossal_ant_chambers", "health": 62, "damage": 16, "speed": 31.0, "aggro_tiles": 9, "color": Color8(138, 111, 72)},
 	"dwarf_crossbowman": {"name": "Dwarf Crossbowman", "band": "colossal_ant_chambers", "health": 46, "damage": 14, "speed": 34.0, "aggro_tiles": 13, "color": Color8(118, 100, 82)},
 	"dwarf_smith": {"name": "Dwarf Smith", "band": "colossal_ant_chambers", "health": 70, "damage": 18, "speed": 27.0, "aggro_tiles": 9, "color": Color8(152, 93, 54)},
-	"mummy_sentry": {"name": "Mummy Sentry", "band": "buried_pyramids", "health": 72, "damage": 18, "speed": 25.0, "aggro_tiles": 7, "color": Color8(210, 179, 106)}
+	"mummy_sentry": {"name": "Mummy Sentry", "band": "buried_pyramids", "health": 72, "damage": 18, "speed": 25.0, "aggro_tiles": 7, "color": Color8(210, 179, 106)},
+	"drow_warrior": {"name": "Drow Warrior", "band": "drow_enclaves", "health": 95, "damage": 24, "speed": 32.0, "aggro_tiles": 11, "color": Color8(62, 55, 119)},
+	"drow_acolyte": {"name": "Drow Acolyte", "band": "drow_enclaves", "health": 65, "damage": 28, "speed": 36.0, "aggro_tiles": 13, "color": Color8(112, 206, 177)}
 }
 
 const COLLIDERS := {
@@ -26,7 +28,9 @@ const COLLIDERS := {
 	"dwarf_smith": {"width": 18.0, "height": 25.0},
 	"mummy_sentry": {"width": 14.0, "height": 28.0},
 	"tunneling_worm_head": {"width": 26.0, "height": 18.0},
-	"tunneling_worm_segment": {"width": 12.0, "height": 12.0}
+	"tunneling_worm_segment": {"width": 12.0, "height": 12.0},
+	"drow_warrior": {"width": 16.0, "height": 26.0},
+	"drow_acolyte": {"width": 14.0, "height": 26.0}
 }
 
 const BOSSES := {

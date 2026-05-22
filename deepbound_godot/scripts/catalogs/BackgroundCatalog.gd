@@ -15,6 +15,9 @@ const BACKGROUNDS := {
 	"dwarf_granite_background": {"name": "Dwarf Granite Backwall", "band": "colossal_ant_chambers", "hardness": 1.35, "breakable": true, "color": Color8(48, 52, 54), "highlight": Color8(130, 137, 133), "item": "stone_background_block", "drops": [{"item": "stone_background_block", "min": 1, "max": 1, "chance": 1.0}]},
 	"dwarf_forge_background": {"name": "Dwarf Forge Backwall", "band": "colossal_ant_chambers", "hardness": 1.45, "breakable": true, "color": Color8(72, 45, 35), "highlight": Color8(230, 143, 63), "item": "stone_background_block", "drops": [{"item": "stone_background_block", "min": 1, "max": 1, "chance": 1.0}]},
 	"dwarf_rune_background": {"name": "Dwarf Rune Backwall", "band": "colossal_ant_chambers", "hardness": 1.55, "breakable": true, "color": Color8(45, 48, 57), "highlight": Color8(255, 214, 107), "item": "stone_background_block", "drops": [{"item": "stone_background_block", "min": 1, "max": 1, "chance": 1.0}]},
+	"drow_carved_background": {"name": "Drow Carved Backwall", "band": "drow_enclaves", "hardness": 1.65, "breakable": true, "color": Color8(28, 32, 68), "highlight": Color8(85, 214, 210), "item": "stone_background_block", "drops": [{"item": "stone_background_block", "min": 1, "max": 1, "chance": 1.0}]},
+	"drow_webbed_background": {"name": "Drow Webbed Backwall", "band": "drow_enclaves", "hardness": 1.45, "breakable": true, "color": Color8(22, 26, 58), "highlight": Color8(160, 112, 220), "item": "stone_background_block", "drops": [{"item": "stone_background_block", "min": 1, "max": 1, "chance": 0.8}]},
+	"drow_scriptuarium_background": {"name": "Drow Scriptuarium Backwall", "band": "drow_enclaves", "hardness": 1.75, "breakable": true, "color": Color8(24, 28, 64), "highlight": Color8(218, 188, 255), "item": "stone_background_block", "drops": [{"item": "stone_background_block", "min": 1, "max": 1, "chance": 1.0}]},
 }
 
 static func get_background(background_id: String) -> Dictionary:

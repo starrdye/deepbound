@@ -146,6 +146,7 @@ var container_parent: Node2D
 var container_blocks: Dictionary = {}
 var beacons: Array[Vector2] = []
 var flares: Array[Dictionary] = []
+var player_utility_radius_tiles := 0.0
 var last_redraw_center_tile := Vector2i(999999, 999999)
 var placement_preview_visible := false
 var placement_preview_tile := Vector2i(999999, 999999)
@@ -487,8 +488,13 @@ func add_flare(point: Vector2) -> void:
 	flares.append({"position": point, "life": 12.0})
 	_queue_dynamic_overlay_redraw()
 
+func set_player_utility_light(radius_tiles: float) -> void:
+	player_utility_radius_tiles = radius_tiles
+
 func get_light_sources(player_position: Vector2) -> Array[Dictionary]:
 	var sources: Array[Dictionary] = [{"position": player_position + Vector2(0, -18), "radius_tiles": 9.0, "intensity": 0.95}]
+	if player_utility_radius_tiles > 0.0:
+		sources.append({"position": player_position + Vector2(0, -18), "radius_tiles": player_utility_radius_tiles, "intensity": 0.88})
 	for beacon in beacons:
 		sources.append({"position": beacon, "radius_tiles": 12.0, "intensity": 0.75})
 	for flare in flares:

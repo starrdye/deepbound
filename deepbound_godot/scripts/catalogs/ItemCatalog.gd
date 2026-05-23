@@ -142,6 +142,80 @@ const ITEMS := {
 	},
 }
 
+	# ── Equipment — Head ─────────────────────────────────────────────────────
+	"iron_helm": {
+		"name": "Iron Helm",
+		"desc": "A sturdy iron helmet.\n+2 Defense",
+		"rarity": "common",
+		"category": "head",
+	},
+	"crystal_helm": {
+		"name": "Crystal Helm",
+		"desc": "A helm of cave crystal.\n+4 Defense  |  +5 Max HP",
+		"rarity": "rare",
+		"category": "head",
+	},
+	# ── Equipment — Body ─────────────────────────────────────────────────────
+	"leather_vest": {
+		"name": "Leather Vest",
+		"desc": "Tanned hide stitched into a vest.\n+1 Defense",
+		"rarity": "common",
+		"category": "body",
+	},
+	"iron_chestplate": {
+		"name": "Iron Chestplate",
+		"desc": "Heavy iron plate for the chest.\n+4 Defense",
+		"rarity": "uncommon",
+		"category": "body",
+	},
+	# ── Equipment — Legs ─────────────────────────────────────────────────────
+	"leather_pants": {
+		"name": "Leather Pants",
+		"desc": "Simple hardened leather legwear.\n+1 Defense",
+		"rarity": "common",
+		"category": "legs",
+	},
+	"iron_greaves": {
+		"name": "Iron Greaves",
+		"desc": "Leg armor hammered from iron.\n+2 Defense",
+		"rarity": "uncommon",
+		"category": "legs",
+	},
+	# ── Equipment — Feet ─────────────────────────────────────────────────────
+	"leather_boots": {
+		"name": "Leather Boots",
+		"desc": "Sturdy boots for cave exploration.\n+1 Defense  |  +10% Speed",
+		"rarity": "common",
+		"category": "feet",
+	},
+	# ── Equipment — Accessory ────────────────────────────────────────────────
+	"copper_ring": {
+		"name": "Copper Ring",
+		"desc": "A simple copper band.\n+5 Max HP",
+		"rarity": "common",
+		"category": "accessory",
+	},
+	"resin_amulet": {
+		"name": "Resin Amulet",
+		"desc": "Hardened resin pendant.\n+1 Defense  |  -10% Drill Heat",
+		"rarity": "uncommon",
+		"category": "accessory",
+	},
+	# ── Equipment — Utility ──────────────────────────────────────────────────
+	"torch": {
+		"name": "Torch",
+		"desc": "A burning torch.\nIlluminates a wide area when equipped.",
+		"rarity": "common",
+		"category": "utility",
+	},
+	"lantern": {
+		"name": "Lantern",
+		"desc": "An oil lantern with a bright steady flame.\nIlluminates a very wide area when equipped.",
+		"rarity": "uncommon",
+		"category": "utility",
+	},
+}
+
 static func get_item(item_id: String) -> Dictionary:
 	return ITEMS.get(item_id, {})
 

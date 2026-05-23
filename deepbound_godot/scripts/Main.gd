@@ -24,6 +24,9 @@ const EquipmentCatalog      = preload("res://scripts/catalogs/EquipmentCatalog.g
 const BossEncounterSystem   = preload("res://scripts/systems/BossEncounterSystem.gd")
 const GiantAntQueenScript   = preload("res://scripts/boss/GiantAntQueen.gd")
 const BossUIScript          = preload("res://scenes/boss/BossUI.gd")
+const LootDropScene         = preload("res://scenes/LootDrop.tscn")
+const LootDropController    = preload("res://scripts/controllers/LootDropController.gd")
+const EnemyCatalog          = preload("res://scripts/catalogs/EnemyCatalog.gd")
 
 const TEST_CHEST_OFFSET := Vector2(64, -16)
 const TEST_CHEST_OPEN_DISTANCE := 46.0
@@ -338,6 +341,14 @@ func _spawn_enemy(enemy_id: String, pos: Vector2) -> void:
 	enemies_node.add_child(enemy)
 	enemy.global_position = spawn.position
 	enemy.setup(enemy_id, player, world)
+	# Connect loot drop signal — fires once then auto-disconnects via CONNECT_ONE_SHOT.
+	if enemy.has_signal("died"):
+		enemy.died.connect(_on_enemy_died, CONNECT_ONE_SHOT)
+
+func _on_enemy_died(eid: String, pos: Vector2) -> void:
+	var drops := EnemyCatalog.roll_drops(eid)
+	for stack in drops:
+		_spawn_loot_drop(stack, pos)
 
 func _maybe_spawn_nearby_structure_encounters(force := false) -> void:
 	if world == null or player == null or enemies_node == null:
@@ -752,11 +763,23 @@ func _spawn_boss(boss_id: String, pos: Vector2) -> void:
 	boss_node.setup(player, world)
 
 func _on_boss_loot_dropped(pos: Vector2, drops: Array) -> void:
-	for i in range(drops.size()):
-		var stack: Dictionary = drops[i]
-		var offset := Vector2(float((i % 3) - 1) * 6.0, -8.0 - float(i / 3) * 4.0)
-		var toss   := Vector2(float((i % 3) - 1) * 40.0, -55.0)
-		_spawn_world_drop_at(stack, pos + offset, true, toss)
+	# Use loot drops (physics pop + rarity glow) for boss rewards.
+	for stack in drops:
+		_spawn_loot_drop(stack, pos)
+
+## Spawn a physics-driven loot pop at `pos`.
+## Uses LootDropController — bounce, spin, pickup delay, rarity glow, magnet.
+func _spawn_loot_drop(stack: Dictionary, pos: Vector2, pop_impulse := Vector2.ZERO) -> void:
+	if drops_node == null or not is_instance_valid(player):
+		return
+	var item_id : String = String(stack.get("item", ""))
+	var count   : int    = int(stack.get("count", 0))
+	if item_id == "" or count <= 0:
+		return
+	var drop = LootDropScene.instantiate()
+	drops_node.add_child(drop)
+	drop.global_position = pos
+	drop.setup(item_id, count, player, player.inventory, world, pop_impulse)
 
 ## Hook called by SaveGameSystem.apply_game_state → main._refresh_encounters_after_load.
 ## Clears any live boss nodes so they are not duplicated on load.

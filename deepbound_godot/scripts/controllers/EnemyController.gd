@@ -12,6 +12,10 @@ const SPRITE_FRAMES_PER_MOVE := 8
 const GRAVITY := 1900.0
 const MAX_FALL := 520.0
 
+## Emitted on death with the enemy's catalog id and world position.
+## Main.gd connects this in _spawn_enemy() to spawn loot drops.
+signal died(enemy_id: String, position: Vector2)
+
 var enemy_id := "cave_skitter"
 var data := {}
 var world
@@ -60,6 +64,7 @@ func take_damage(amount: int) -> void:
 	if health <= 0:
 		alive = false
 		visible = false
+		died.emit(enemy_id, global_position)
 		return
 	_invalidate_draw_frame()
 

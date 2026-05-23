@@ -41,8 +41,77 @@ const BOSSES := {
 	"obsidian_baron": {"band": "abyssal_lava_slums", "health": 1360, "damage": 44, "unlock": "heat_core"}
 }
 
+## Drop tables: each entry is an Array of { item, count_min, count_max, chance }.
+## `chance` is 0.0–1.0.  All matching entries are rolled independently each kill.
+const DROPS := {
+	"cave_skitter": [
+		{"item": "dirt_clod",    "count_min": 1, "count_max": 2, "chance": 0.60},
+		{"item": "copper_nugget","count_min": 1, "count_max": 1, "chance": 0.25},
+	],
+	"goblin_grunt": [
+		{"item": "stone_chunk",  "count_min": 1, "count_max": 3, "chance": 0.65},
+		{"item": "copper_nugget","count_min": 1, "count_max": 2, "chance": 0.40},
+	],
+	"goblin_slinger": [
+		{"item": "stone_chunk",  "count_min": 1, "count_max": 2, "chance": 0.55},
+		{"item": "copper_nugget","count_min": 1, "count_max": 2, "chance": 0.35},
+	],
+	"goblin_shaman": [
+		{"item": "copper_nugget","count_min": 2, "count_max": 4, "chance": 0.70},
+		{"item": "resin_shard",  "count_min": 1, "count_max": 1, "chance": 0.20},
+	],
+	"worker_ant": [
+		{"item": "stone_chunk",  "count_min": 1, "count_max": 2, "chance": 0.60},
+		{"item": "copper_nugget","count_min": 1, "count_max": 2, "chance": 0.30},
+	],
+	"soldier_ant": [
+		{"item": "copper_nugget","count_min": 2, "count_max": 3, "chance": 0.65},
+		{"item": "resin_shard",  "count_min": 1, "count_max": 2, "chance": 0.35},
+	],
+	"dwarf_guard": [
+		{"item": "copper_nugget","count_min": 2, "count_max": 4, "chance": 0.75},
+		{"item": "stone_chunk",  "count_min": 1, "count_max": 3, "chance": 0.50},
+	],
+	"dwarf_crossbowman": [
+		{"item": "copper_nugget","count_min": 2, "count_max": 3, "chance": 0.70},
+		{"item": "resin_shard",  "count_min": 1, "count_max": 1, "chance": 0.25},
+	],
+	"dwarf_smith": [
+		{"item": "copper_nugget","count_min": 3, "count_max": 5, "chance": 0.80},
+		{"item": "resin_shard",  "count_min": 1, "count_max": 2, "chance": 0.40},
+	],
+	"mummy_sentry": [
+		{"item": "sandstone_shard","count_min": 1, "count_max": 3, "chance": 0.70},
+		{"item": "copper_nugget",  "count_min": 2, "count_max": 4, "chance": 0.55},
+		{"item": "cursed_relic",   "count_min": 1, "count_max": 1, "chance": 0.05},
+	],
+	"drow_warrior": [
+		{"item": "copper_nugget","count_min": 3, "count_max": 5, "chance": 0.75},
+		{"item": "drow_silk",    "count_min": 1, "count_max": 1, "chance": 0.15},
+	],
+	"drow_acolyte": [
+		{"item": "copper_nugget","count_min": 2, "count_max": 4, "chance": 0.70},
+		{"item": "drow_silk",    "count_min": 1, "count_max": 1, "chance": 0.20},
+		{"item": "glow_spore",   "count_min": 1, "count_max": 1, "chance": 0.15},
+	],
+}
+
 static func get_enemy(enemy_id: String) -> Dictionary:
 	return ENEMIES.get(enemy_id, ENEMIES.cave_skitter)
 
 static func get_collider(enemy_id: String) -> Dictionary:
 	return COLLIDERS.get(enemy_id, COLLIDERS.cave_skitter)
+
+## Roll all drops for an enemy and return an Array of { item, count } dicts.
+## Returns an empty array if no drops roll.
+static func roll_drops(enemy_id: String) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var table: Array = DROPS.get(enemy_id, [])
+	for entry in table:
+		if randf() <= float(entry.get("chance", 0.0)):
+			var count_min: int = int(entry.get("count_min", 1))
+			var count_max: int = int(entry.get("count_max", 1))
+			var count: int = randi_range(count_min, count_max)
+			if count > 0:
+				result.append({"item": String(entry.get("item", "")), "count": count})
+	return result

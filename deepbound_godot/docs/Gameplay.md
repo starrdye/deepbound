@@ -70,6 +70,46 @@ When a tile breaks, its drops try to enter the player inventory. If inventory sp
 
 ---
 
+## Loot Drops (Enemy Kills and Boss Rewards)
+
+Enemy kills and boss deaths spawn **physics loot drops** — small items that physically pop out with a random upward arc, bounce off terrain, spin through the air, and then magnetically fly to the player when they get close.
+
+### Pickup
+
+| Phase | What happens |
+|-------|-------------|
+| **0 – 0.5 s** | Drop is semi-transparent; cannot be picked up (pickup delay). Falls and bounces. |
+| **After 0.5 s** | `can_be_picked_up = true`. Click to collect, or enter magnet radius (90 px). |
+| **Magnet** | Within 90 px the drop flies toward the player, speeding up quadratically as it closes in. |
+| **Collect** | Absorbed automatically within 14 px, or on left-click. |
+
+### Rarity Glow
+
+Items with higher rarity show a coloured ring around the drop so you can spot them at a glance:
+
+| Rarity | Glow colour |
+|--------|-------------|
+| Common | None |
+| Uncommon | Green |
+| Rare | Blue |
+| Epic | Purple |
+| Legendary | Gold |
+
+### Enemy Drop Tables
+
+Each enemy has an independent per-slot chance roll. Multiple items can drop from one kill.
+
+| Enemy | Drops |
+|-------|-------|
+| Cave Skitter | Dirt Clod (60 %), Copper Nugget (25 %) |
+| Goblin Grunt | Stone Chunk (65 %), Copper Nugget (40 %) |
+| Goblin Shaman | Copper Nugget (70 %), Resin Shard (20 %) |
+| Soldier Ant | Copper Nugget (65 %), Resin Shard (35 %) |
+| Mummy Sentry | Sandstone Shard (70 %), Copper (55 %), Cursed Relic (5 %) |
+| Giant Ant Queen (boss) | 12× Copper, 8× Stone, 4× Resin |
+
+---
+
 ## Equipment
 
 ### Overview

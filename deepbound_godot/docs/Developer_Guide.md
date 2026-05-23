@@ -658,7 +658,102 @@ Older saves are normalised up automatically. v1/v2 files gain an empty `defeated
 
 ---
 
-### 4.13 Boss Encounters
+### 4.13 Loot Drop System
+
+**Files:** `scripts/controllers/LootDropController.gd`, `scenes/LootDrop.tscn`, `scripts/catalogs/EnemyCatalog.gd` (`DROPS` + `roll_drops`)
+
+#### Two drop types — which to use
+
+| Type | Node | When to use |
+|------|------|------------|
+| `DroppedItemController` | `Node2D` | Player throws items, chest spills, inventory drag-to-world |
+| `LootDropController` | `Node2D` | Enemy deaths, boss loot, mining rewards |
+
+#### Physics model
+
+The world has no Godot physics bodies, so `LootDropController` uses the same custom `CollisionSystem.move_actor()` as the player and enemies rather than `RigidBody2D`. It adds:
+
+- **Bounce** — when `blocked_y` fires on a downward frame, Y velocity is reflected × `bounce` (default **0.4**). Tiny bounces < 12 px/s are killed to avoid infinite jitter.
+- **Wall bounce** — `blocked_x` reflects X × `bounce × 0.5`.
+- **Friction** — horizontal deceleration on ground: `friction × 320 px/s²` (default **0.8**).
+- **Angular spin** — `_angular_vel` (rad/s) is applied to `angular_rotation` each frame; decays via `SPIN_DRAG = 3.5 rad/s²`. Rotation is visual only (applied to `draw_set_transform`).
+
+Both `bounce` and `friction` are public vars — override them on an instance for specialised drops (e.g. slippery ice tiles: `drop.friction = 0.1`).
+
+#### Pop impulse
+
+`setup()` accepts an optional `pop_impulse: Vector2`. If `Vector2.ZERO` is passed (default), a random pop is generated:
+
+- Horizontal: `±60–130 px/s` (biased away from zero)
+- Vertical: `−180–−310 px/s` (always upward)
+- Angular: random `±1.2 × 2π rad/s`
+
+#### Pickup delay
+
+A `Timer` node named `PickupDelay` is added as a child of each `LootDrop` in `setup()`:
+- `wait_time = 0.5 s`, `one_shot = true`, `autostart = true`
+- On timeout: `can_be_picked_up = true`
+- `try_collect()` and the magnet both check this flag first.
+
+During the delay, the sprite fades in from 50 % to 100 % alpha so the player can see the item appearing without being able to absorb it instantly.
+
+#### Magnetic attraction
+
+Once `can_be_picked_up` is true, `_update_magnet(delta)` runs each frame:
+1. If player is farther than `MAGNET_RADIUS (90 px)` or inventory is full → return false (normal physics continue).
+2. Pull speed is interpolated quadratically: `lerp(80, 260, ratio²)` where `ratio = 1 - distance / MAGNET_RADIUS`.
+3. Speed is smoothed with `move_toward(..., 300 × delta)` to avoid instant snapping.
+4. Collect on `distance ≤ COLLECT_RADIUS (14 px)`.
+
+#### Rarity glow
+
+`_resolve_rarity_color()` looks up the item in `ItemCatalog.get_item(id)` and maps `rarity` to a colour:
+
+```gdscript
+"uncommon"  → Color8(80,  210, 100)   # green
+"rare"      → Color8(80,  140, 255)   # blue
+"epic"      → Color8(180, 80,  255)   # purple
+"legendary" → Color8(255, 200, 40)    # gold
+"common"    → Color.TRANSPARENT       # no glow
+```
+
+The ring pulses in opacity (`sin(time × 1.1 Hz)`) so it catches the eye.
+
+#### Enemy drop tables
+
+`EnemyCatalog.DROPS` maps every enemy id to an `Array` of entries:
+
+```gdscript
+{"item": "copper_nugget", "count_min": 1, "count_max": 2, "chance": 0.40}
+```
+
+`EnemyCatalog.roll_drops(enemy_id)` iterates the table and rolls each entry independently. Returns an `Array[Dictionary]` of `{ item, count }` for the entries that fired.
+
+#### Wiring into Main.gd
+
+- `EnemyController.died` signal (added alongside existing `take_damage`) carries `(enemy_id, position)`.
+- `Main._spawn_enemy()` connects `died` with `CONNECT_ONE_SHOT` to `_on_enemy_died`.
+- `_on_enemy_died` calls `roll_drops` and `_spawn_loot_drop` for each result.
+- `_spawn_loot_drop(stack, pos, pop_impulse)` instantiates `LootDrop.tscn` and calls `setup()`.
+- Boss loot (`_on_boss_loot_dropped`) also goes through `_spawn_loot_drop`.
+
+#### Adding a new enemy drop
+
+1. Open `EnemyCatalog.gd`.
+2. Add an entry to `DROPS`:
+
+```gdscript
+"new_enemy": [
+    {"item": "rare_gem", "count_min": 1, "count_max": 1, "chance": 0.08},
+    {"item": "stone_chunk", "count_min": 2, "count_max": 5, "chance": 0.70},
+],
+```
+
+No other code changes are needed — `roll_drops` picks it up automatically.
+
+---
+
+### 4.14 Boss Encounters
 
 **Files:** `scripts/systems/BossEncounterSystem.gd`, `scripts/boss/`
 

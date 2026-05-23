@@ -180,7 +180,8 @@ Scene-bound logic attached to Godot nodes. Each controller corresponds to exactl
 | `HudController.gd` | `Hud.tscn` | Immediate-mode `_draw()` rendering for hearts, hotbar, inventory/container panels, **equipment panel** (7-slot column), crafting panel, dialogue panel, and vendor panel. Communicates outward via signals only. |
 | `NpcController.gd` | spawned in world | Friendly NPC: drawn body and name label. Owns an `InteractableComponent` child that handles proximity and the `interacted` signal. |
 | `ChestController.gd` | spawned in world | Chest open/close animation, loot-to-inventory transfer UI. |
-| `DroppedItemController.gd` | spawned in world | Physics drop arc, pickup delay timer, magnet radius to player. |
+| `DroppedItemController.gd` | spawned in world | Inventory-drag / chest-spill drops. Click-to-collect, manual drag. Used for player-thrown items. |
+| `LootDropController.gd` | `LootDrop.tscn` | Physics "loot pop" for enemy kills and boss rewards. Bounce (coeff 0.4), angular spin, 0.5 s pickup delay `Timer`, magnetic attraction within 90 px, rarity glow ring, shadow ellipse. |
 | `MainMenuController.gd` | `MainMenu.tscn` | New game / continue / settings navigation, save-file detection. |
 | `PrefabDesignerController.gd` | `PrefabDesigner.tscn` | Full in-engine template editor. Loads templates listed in `BUILTIN_TEMPLATE_PATHS`. Saves back to the same `.json` path — edits are live in the game immediately. |
 
@@ -198,7 +199,8 @@ Thin node graphs. All logic lives in `scripts/controllers/`. The scene just decl
 
 | File | Purpose |
 |------|---------|
-| `Main.tscn` | Root scene. Holds World, Player, Camera, HUD, and spawner nodes. |
+| `Main.tscn` | Root scene. Holds World, Player, Camera, HUD, Enemies, Bosses, and Drops spawner nodes. |
+| `LootDrop.tscn` | Minimal scene (Node2D + `LootDropController` script). Instantiated by `Main._spawn_loot_drop()`. |
 | `World.tscn` | TileMap-style renderer. Receives chunk tile arrays from `WorldGenerator` and draws them. |
 | `Player.tscn` | Player character: `CharacterBody2D` + sprite + mining arm. |
 | `Enemy.tscn` | Enemy entity: `CharacterBody2D` + sprite + hitbox. |

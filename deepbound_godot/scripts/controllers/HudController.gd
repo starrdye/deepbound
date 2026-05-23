@@ -10,6 +10,7 @@ const DialogueCatalog = preload("res://scripts/catalogs/DialogueCatalog.gd")
 const NPCCatalog      = preload("res://scripts/catalogs/NPCCatalog.gd")
 const VendorCatalog   = preload("res://scripts/catalogs/VendorCatalog.gd")
 const EquipmentCatalog = preload("res://scripts/catalogs/EquipmentCatalog.gd")
+const EquipmentSystem  = preload("res://scripts/systems/EquipmentSystem.gd")
 
 signal world_drop_requested(stack: Dictionary)
 signal hotbar_slot_selected(index: int)
@@ -553,7 +554,7 @@ func _get_hit_stack(hit: Dictionary) -> Dictionary:
 	if String(hit.get("panel", "")) == "equip":
 		if equipment_system == null:
 			return _empty_stack()
-		var item_id := equipment_system.get_item(String(hit.get("slot_id", "")))
+		var item_id: String = equipment_system.get_item(String(hit.get("slot_id", "")))
 		if item_id == "":
 			return _empty_stack()
 		return {"item": item_id, "count": 1, "stack_cap": 1}
@@ -567,7 +568,7 @@ func _take_hit_stack(hit: Dictionary) -> Dictionary:
 	if String(hit.get("panel", "")) == "equip":
 		if equipment_system == null:
 			return _empty_stack()
-		var item_id := equipment_system.unequip(String(hit.get("slot_id", "")))
+		var item_id: String = equipment_system.unequip(String(hit.get("slot_id", "")))
 		if item_id == "":
 			return _empty_stack()
 		return {"item": item_id, "count": 1, "stack_cap": 1}
@@ -587,7 +588,7 @@ func _place_hit_stack(hit: Dictionary, stack: Dictionary) -> Dictionary:
 		if incoming_id == "" or count <= 0:
 			return _empty_stack()
 		# swap() returns incoming_id unchanged when the item doesn't belong here
-		var displaced_id := equipment_system.swap(slot_id, incoming_id)
+		var displaced_id: String = equipment_system.swap(slot_id, incoming_id)
 		if displaced_id == incoming_id:
 			return stack.duplicate()  # rejected — return unchanged
 		if displaced_id == "":
@@ -1344,7 +1345,7 @@ func _equip_panel_rect() -> Rect2:
 	if not inventory_open or equipment_system == null:
 		return Rect2()
 	var inv_rect := _player_panel_rect()
-	var slot_count := EquipmentSystem.SLOT_IDS.size()
+	var slot_count: int = EquipmentSystem.SLOT_IDS.size()
 	var slot_h := float(slot_count) * (SLOT_SIZE + SLOT_GAP) - SLOT_GAP
 	var panel_h := PANEL_PADDING * 2.0 + PANEL_HEADER + slot_h
 	return Rect2(
@@ -1382,7 +1383,7 @@ func _draw_equipment_panel() -> void:
 	for i in range(EquipmentSystem.SLOT_IDS.size()):
 		var slot_id: String = EquipmentSystem.SLOT_IDS[i]
 		var slot_rect  := _equip_slot_rect_by_idx(i)
-		var item_id    := equipment_system.get_item(slot_id)
+		var item_id: String = equipment_system.get_item(slot_id)
 		var is_dragged := (not drag_source.is_empty()
 			and String(drag_source.get("panel", "")) == "equip"
 			and String(drag_source.get("slot_id", "")) == slot_id)

@@ -15,7 +15,7 @@ class_name StatCalculator
 
 ## Compute and return all summed stat bonuses from the given EquipmentSystem.
 ## Returns a Dictionary with integer/float values for every stat key.
-static func compute(equipment_system: EquipmentSystem) -> Dictionary:
+static func compute(equipment_system) -> Dictionary:
 	var totals := {
 		"damage":     0,
 		"defense":    0,
@@ -40,7 +40,7 @@ static func compute(equipment_system: EquipmentSystem) -> Dictionary:
 
 ## Returns the utility light radius in tiles from the equipped utility item,
 ## or 0.0 if the utility slot is empty or has no light_radius_tiles entry.
-static func get_utility_light_radius(equipment_system: EquipmentSystem) -> float:
+static func get_utility_light_radius(equipment_system) -> float:
 	var item_id: String = equipment_system.get_item("utility")
 	if item_id == "":
 		return 0.0

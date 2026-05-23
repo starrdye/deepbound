@@ -140,8 +140,6 @@ const ITEMS := {
 		"rarity": "uncommon",
 		"category": "placeable",
 	},
-}
-
 	# ── Equipment — Head ─────────────────────────────────────────────────────
 	"iron_helm": {
 		"name": "Iron Helm",

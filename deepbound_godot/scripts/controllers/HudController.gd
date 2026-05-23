@@ -27,6 +27,11 @@ const HOTBAR_MARGIN_BOTTOM := 14.0
 
 const TERMINAL_H := 32.0  # height of the plain grey input rectangle
 
+const TOOLTIP_PAD := 10.0
+const TOOLTIP_NAME_SZ := 14
+const TOOLTIP_BODY_SZ := 11
+const TOOLTIP_LINE_GAP := 3.0
+
 var health_label: Label
 var inventory_label: Label
 var depth_label: Label
@@ -45,6 +50,13 @@ var hud_state_signature := ""
 
 ## Terminal console
 var _terminal_line_edit: LineEdit = null
+
+## Tooltip — layout is rebuilt once on hover change, not every draw frame
+var _hovered_item_id := ""
+var _tooltip_lines: Array[Dictionary] = []
+var _tooltip_panel_w := 0.0
+var _tooltip_panel_h := 0.0
+var _tooltip_border_color := Color.TRANSPARENT
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -91,6 +103,7 @@ func close_inventory() -> void:
 	inventory_open = false
 	container_open = false
 	container_inventory = null
+	_hovered_item_id = ""
 	queue_redraw()
 
 func _flush_cursor_stack() -> void:
@@ -273,7 +286,19 @@ func _gui_input(event: InputEvent) -> void:
 				hotbar_slot_selected.emit(hotbar_index)
 				accept_event()
 	elif event is InputEventMouseMotion:
-		queue_redraw()
+		if not _is_empty_stack(cursor_stack):
+			queue_redraw()
+		else:
+			var new_hover := _item_id_at(event.position)
+			if new_hover != _hovered_item_id:
+				_hovered_item_id = new_hover
+				if new_hover != "":
+					var font := get_theme_default_font()
+					if font != null:
+						_rebuild_tooltip_layout(new_hover, font)
+				queue_redraw()
+			elif _hovered_item_id != "":
+				queue_redraw()
 
 func _handle_mouse_press(point: Vector2) -> bool:
 	var hit := _slot_at(point)
@@ -510,89 +535,64 @@ func _item_id_at(point: Vector2) -> String:
 		if player_inventory != null and player_inventory.has_method("get_hotbar_slot"):
 			return String(player_inventory.get_hotbar_slot(hotbar_idx).get("item", ""))
 		var slots: Array = hud_state.get("hotbar_slots", [])
-		if hotbar_idx < slots.size():
-			return String(slots[hotbar_idx].get("item", ""))
-		return ""
+		return String(slots[hotbar_idx].get("item", "")) if hotbar_idx < slots.size() else ""
 	if inventory_open:
 		var hit := _slot_at(point)
 		if not hit.is_empty():
 			return String(_get_hit_stack(hit).get("item", ""))
 	return ""
 
-func _draw_tooltip() -> void:
-	if TerminalSystem.is_open or not _is_empty_stack(cursor_stack):
-		return
-	var mouse_pos := get_local_mouse_position()
-	var item_id := _item_id_at(mouse_pos)
-	if item_id == "":
-		return
-
+func _rebuild_tooltip_layout(item_id: String, font: Font) -> void:
 	var def := ItemCatalog.get_item(item_id)
 	var item_name := String(def.get("name", item_id.replace("_", " ").capitalize()))
 	var rarity := String(def.get("rarity", "common"))
-	var category := String(def.get("category", ""))
-	var desc := String(def.get("desc", ""))
+	var rarity_col := ItemCatalog.rarity_color(rarity)
 
+	_tooltip_lines.clear()
+	_tooltip_lines.append({"text": item_name, "color": rarity_col, "size": TOOLTIP_NAME_SZ})
+	if rarity != "common":
+		_tooltip_lines.append({"text": rarity.capitalize(), "color": rarity_col.lerp(Color8(140, 140, 140), 0.5), "size": TOOLTIP_BODY_SZ})
+	var category := String(def.get("category", ""))
+	if category != "":
+		_tooltip_lines.append({"text": category.replace("_", " ").capitalize(), "color": Color8(160, 160, 160), "size": TOOLTIP_BODY_SZ})
+	var desc := String(def.get("desc", ""))
+	if desc != "":
+		_tooltip_lines.append({"text": "", "color": Color.WHITE, "size": 5})
+		for line in desc.split("\n"):
+			_tooltip_lines.append({"text": line, "color": Color8(210, 210, 210), "size": TOOLTIP_BODY_SZ})
+
+	var max_w := 0.0
+	_tooltip_panel_h = TOOLTIP_PAD * 2.0
+	for ld in _tooltip_lines:
+		_tooltip_panel_h += float(int(ld.size)) + TOOLTIP_LINE_GAP
+		if String(ld.text) != "":
+			max_w = maxf(max_w, font.get_string_size(String(ld.text), HORIZONTAL_ALIGNMENT_LEFT, -1, int(ld.size)).x)
+	_tooltip_panel_w = max_w + TOOLTIP_PAD * 2.0
+	_tooltip_border_color = Color(rarity_col, 0.80)
+
+func _draw_tooltip() -> void:
+	if TerminalSystem.is_open or not _is_empty_stack(cursor_stack) or _hovered_item_id == "":
+		return
 	var font := get_theme_default_font()
 	if font == null:
 		return
 
-	const PAD := 10.0
-	const NAME_SZ := 14
-	const BODY_SZ := 11
-	const LINE_GAP := 3.0
-
-	# Build lines: [{text, color, size}]
-	var lines: Array[Dictionary] = []
-	lines.append({"text": item_name, "color": ItemCatalog.rarity_color(rarity), "size": NAME_SZ})
-	if rarity != "common":
-		var dim := ItemCatalog.rarity_color(rarity).lerp(Color8(140, 140, 140), 0.5)
-		lines.append({"text": rarity.capitalize(), "color": dim, "size": BODY_SZ})
-	if category != "":
-		lines.append({"text": category.replace("_", " ").capitalize(), "color": Color8(160, 160, 160), "size": BODY_SZ})
-	if desc != "":
-		lines.append({"text": "", "color": Color.WHITE, "size": 5})
-		for line in desc.split("\n"):
-			lines.append({"text": line, "color": Color8(210, 210, 210), "size": BODY_SZ})
-
-	# Measure required width
-	var max_w := 0.0
-	for ld in lines:
-		if String(ld.text) == "":
-			continue
-		var w := font.get_string_size(String(ld.text), HORIZONTAL_ALIGNMENT_LEFT, -1, int(ld.size)).x
-		if w > max_w:
-			max_w = w
-	var panel_w := max_w + PAD * 2.0
-	var panel_h := PAD * 2.0
-	for ld in lines:
-		panel_h += float(int(ld.size)) + LINE_GAP
-
-	# Position: right of cursor, above; clamped to viewport
+	var mouse_pos := get_local_mouse_position()
 	var vsize := get_viewport_rect().size
-	var px := mouse_pos.x + 18.0
-	var py := mouse_pos.y - panel_h - 12.0
-	px = clampf(px, 4.0, vsize.x - panel_w - 4.0)
-	py = clampf(py, 4.0, vsize.y - panel_h - 4.0)
+	var px := clampf(mouse_pos.x + 18.0, 4.0, vsize.x - _tooltip_panel_w - 4.0)
+	var py := clampf(mouse_pos.y - _tooltip_panel_h - 12.0, 4.0, vsize.y - _tooltip_panel_h - 4.0)
+	var panel_rect := Rect2(Vector2(px, py), Vector2(_tooltip_panel_w, _tooltip_panel_h))
 
-	var panel_rect := Rect2(Vector2(px, py), Vector2(panel_w, panel_h))
-
-	# Shadow
 	draw_rect(Rect2(panel_rect.position + Vector2(3.0, 3.0), panel_rect.size), Color(0, 0, 0, 0.4), true)
-	# Background
 	draw_rect(panel_rect, Color(0.04, 0.04, 0.09, 0.96), true)
-	# Border (tinted by rarity)
-	var border := ItemCatalog.rarity_color(rarity)
-	border.a = 0.80
-	draw_rect(panel_rect, border, false, 1.5)
+	draw_rect(panel_rect, _tooltip_border_color, false, 1.5)
 
-	# Draw text lines
-	var cy := py + PAD
-	for ld in lines:
+	var cy := py + TOOLTIP_PAD
+	for ld in _tooltip_lines:
 		var sz := int(ld.size)
 		if String(ld.text) == "":
-			cy += float(sz) + LINE_GAP
+			cy += float(sz) + TOOLTIP_LINE_GAP
 			continue
-		draw_string(font, Vector2(px + PAD, cy + sz), String(ld.text),
+		draw_string(font, Vector2(px + TOOLTIP_PAD, cy + sz), String(ld.text),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, sz, ld.color)
-		cy += float(sz) + LINE_GAP
+		cy += float(sz) + TOOLTIP_LINE_GAP

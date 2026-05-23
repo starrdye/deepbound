@@ -9,6 +9,7 @@ const ItemCatalog     = preload("res://scripts/catalogs/ItemCatalog.gd")
 const DialogueCatalog = preload("res://scripts/catalogs/DialogueCatalog.gd")
 const NPCCatalog      = preload("res://scripts/catalogs/NPCCatalog.gd")
 const VendorCatalog   = preload("res://scripts/catalogs/VendorCatalog.gd")
+const EquipmentCatalog = preload("res://scripts/catalogs/EquipmentCatalog.gd")
 
 signal world_drop_requested(stack: Dictionary)
 signal hotbar_slot_selected(index: int)
@@ -97,6 +98,9 @@ const DIALOGUE_HINT_SZ       := 10
 const VENDOR_VISIBLE_SLOTS := 6
 const VENDOR_PANEL_W       := 200.0
 
+## ── Equipment panel constants ─────────────────────────────────────────────
+const EQUIP_PANEL_W := 148.0
+
 ## ── Dialogue state ────────────────────────────────────────────────────────
 var _dialogue_open: bool = false
 var _dialogue_npc_id: String = ""
@@ -115,6 +119,10 @@ var _vendor_shop_id: String = ""
 var _vendor_scroll: int = 0
 var _hovered_vendor_idx: int = -1
 
+## ── Equipment state ───────────────────────────────────────────────────────
+var equipment_system = null
+var _hovered_equip_slot: String = ""
+
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_PASS
@@ -126,6 +134,9 @@ func _ready() -> void:
 	hint_label = _make_label(Vector2(740, 650))
 	hint_label.text = ""
 	_build_terminal()
+
+func set_equipment_system(eq_sys) -> void:
+	equipment_system = eq_sys
 
 func open_inventory(player_inv) -> void:
 	player_inventory = player_inv
@@ -168,6 +179,7 @@ func close_inventory() -> void:
 	_hovered_item_id = ""
 	_hovered_craft_id = ""
 	_hovered_vendor_idx = -1
+	_hovered_equip_slot = ""
 	queue_redraw()
 
 func _flush_cursor_stack() -> void:
@@ -242,6 +254,7 @@ func _draw() -> void:
 		_draw_inventory_panel(_player_panel_rect(), "Inventory", player_inventory, PLAYER_COLS, "player")
 		if not container_open and not _vendor_open:
 			_draw_crafting_panel()
+		_draw_equipment_panel()
 	if container_open:
 		_draw_inventory_panel(_container_panel_rect(), container_title, container_inventory, CONTAINER_COLS, "container")
 	if _vendor_open:
@@ -379,6 +392,9 @@ func _gui_input(event: InputEvent) -> void:
 			queue_redraw()
 			accept_event()
 			return
+		if inventory_open and equipment_system != null and _equip_panel_rect().has_point(event.position):
+			accept_event()
+			return
 		if inventory_open and not container_open and not _vendor_open and _crafting_panel_rect().has_point(event.position):
 			_craft_scroll_by(delta_dir)
 			queue_redraw()
@@ -391,10 +407,20 @@ func _gui_input(event: InputEvent) -> void:
 			var new_hover := _item_id_at(event.position)
 			var new_craft_id := _craft_id_at(event.position)
 			var new_vendor_idx := _vendor_idx_at(event.position)
+			var new_equip_slot := ""
+			if inventory_open and equipment_system != null:
+				var eq_hit := _equip_slot_at(event.position)
+				if not eq_hit.is_empty():
+					new_equip_slot = String(eq_hit.get("slot_id", ""))
 			# Craft / vendor hover suppress item tooltip
 			if new_craft_id != "" or new_vendor_idx >= 0:
 				new_hover = ""
 			var needs_redraw := false
+			if new_equip_slot != _hovered_equip_slot:
+				_hovered_equip_slot = new_equip_slot
+				needs_redraw = true
+			elif _hovered_equip_slot != "":
+				needs_redraw = true
 			if new_hover != _hovered_item_id:
 				_hovered_item_id = new_hover
 				if new_hover != "":
@@ -513,6 +539,10 @@ func _slot_at(point: Vector2) -> Dictionary:
 		var hotbar_index := _hotbar_slot_at(point)
 		if hotbar_index >= 0:
 			return {"panel": "hotbar", "index": hotbar_index, "inventory": player_inventory, "rect": _hotbar_slot_rect(hotbar_index)}
+	if inventory_open and equipment_system != null:
+		var equip_hit := _equip_slot_at(point)
+		if not equip_hit.is_empty():
+			return equip_hit
 	if container_open and container_inventory != null:
 		var hit := _slot_at_panel(point, _container_panel_rect(), container_inventory, CONTAINER_COLS, "container")
 		if not hit.is_empty():
@@ -520,6 +550,13 @@ func _slot_at(point: Vector2) -> Dictionary:
 	return {}
 
 func _get_hit_stack(hit: Dictionary) -> Dictionary:
+	if String(hit.get("panel", "")) == "equip":
+		if equipment_system == null:
+			return _empty_stack()
+		var item_id := equipment_system.get_item(String(hit.get("slot_id", "")))
+		if item_id == "":
+			return _empty_stack()
+		return {"item": item_id, "count": 1, "stack_cap": 1}
 	var inventory = hit.inventory
 	var index := int(hit.index)
 	if String(hit.get("panel", "")) == "hotbar":
@@ -527,6 +564,13 @@ func _get_hit_stack(hit: Dictionary) -> Dictionary:
 	return inventory.get_slot(index)
 
 func _take_hit_stack(hit: Dictionary) -> Dictionary:
+	if String(hit.get("panel", "")) == "equip":
+		if equipment_system == null:
+			return _empty_stack()
+		var item_id := equipment_system.unequip(String(hit.get("slot_id", "")))
+		if item_id == "":
+			return _empty_stack()
+		return {"item": item_id, "count": 1, "stack_cap": 1}
 	var inventory = hit.inventory
 	var index := int(hit.index)
 	if String(hit.get("panel", "")) == "hotbar":
@@ -534,6 +578,21 @@ func _take_hit_stack(hit: Dictionary) -> Dictionary:
 	return inventory.take_slot(index)
 
 func _place_hit_stack(hit: Dictionary, stack: Dictionary) -> Dictionary:
+	if String(hit.get("panel", "")) == "equip":
+		if equipment_system == null:
+			return stack.duplicate()
+		var slot_id     := String(hit.get("slot_id", ""))
+		var incoming_id := String(stack.get("item", ""))
+		var count       := int(stack.get("count", 0))
+		if incoming_id == "" or count <= 0:
+			return _empty_stack()
+		# swap() returns incoming_id unchanged when the item doesn't belong here
+		var displaced_id := equipment_system.swap(slot_id, incoming_id)
+		if displaced_id == incoming_id:
+			return stack.duplicate()  # rejected — return unchanged
+		if displaced_id == "":
+			return _empty_stack()
+		return {"item": displaced_id, "count": 1, "stack_cap": 1}
 	var inventory = hit.inventory
 	var index := int(hit.index)
 	if String(hit.get("panel", "")) == "hotbar":
@@ -543,7 +602,13 @@ func _place_hit_stack(hit: Dictionary, stack: Dictionary) -> Dictionary:
 func _is_same_hit(a: Dictionary, b: Dictionary) -> bool:
 	if a.is_empty() or b.is_empty():
 		return false
-	return String(a.get("panel", "")) == String(b.get("panel", "")) and int(a.get("index", -1)) == int(b.get("index", -2)) and a.get("inventory") == b.get("inventory")
+	var pa := String(a.get("panel", ""))
+	var pb := String(b.get("panel", ""))
+	if pa != pb:
+		return false
+	if pa == "equip":
+		return String(a.get("slot_id", "")) == String(b.get("slot_id", ""))
+	return int(a.get("index", -1)) == int(b.get("index", -2)) and a.get("inventory") == b.get("inventory")
 
 func _display_stack_for_slot(panel_id: String, index: int, stack: Dictionary) -> Dictionary:
 	if not _is_empty_stack(cursor_stack) and not drag_source.is_empty():
@@ -660,6 +725,10 @@ func _item_id_at(point: Vector2) -> String:
 			return String(player_inventory.get_hotbar_slot(hotbar_idx).get("item", ""))
 		var slots: Array = hud_state.get("hotbar_slots", [])
 		return String(slots[hotbar_idx].get("item", "")) if hotbar_idx < slots.size() else ""
+	if inventory_open and equipment_system != null:
+		var equip_hit := _equip_slot_at(point)
+		if not equip_hit.is_empty():
+			return equipment_system.get_item(String(equip_hit.get("slot_id", "")))
 	if inventory_open:
 		var hit := _slot_at(point)
 		if not hit.is_empty():
@@ -1268,3 +1337,73 @@ func _handle_vendor_sell_press(point: Vector2) -> bool:
 	player_inventory.remove_item(item_id, 1)
 	player_inventory.add_item("copper_nugget", sell_price)
 	return true
+
+## ── Equipment panel ───────────────────────────────────────────────────────────
+
+func _equip_panel_rect() -> Rect2:
+	if not inventory_open or equipment_system == null:
+		return Rect2()
+	var inv_rect := _player_panel_rect()
+	var slot_count := EquipmentSystem.SLOT_IDS.size()
+	var slot_h := float(slot_count) * (SLOT_SIZE + SLOT_GAP) - SLOT_GAP
+	var panel_h := PANEL_PADDING * 2.0 + PANEL_HEADER + slot_h
+	return Rect2(
+		Vector2(inv_rect.position.x + inv_rect.size.x + 8.0, inv_rect.position.y),
+		Vector2(EQUIP_PANEL_W, panel_h)
+	)
+
+func _equip_slot_rect_by_idx(slot_idx: int) -> Rect2:
+	var panel := _equip_panel_rect()
+	var y := panel.position.y + PANEL_PADDING + PANEL_HEADER + float(slot_idx) * (SLOT_SIZE + SLOT_GAP)
+	return Rect2(Vector2(panel.position.x + PANEL_PADDING, y), Vector2(SLOT_SIZE, SLOT_SIZE))
+
+func _equip_slot_at(point: Vector2) -> Dictionary:
+	if not inventory_open or equipment_system == null:
+		return {}
+	var panel := _equip_panel_rect()
+	if not panel.has_point(point):
+		return {}
+	for i in range(EquipmentSystem.SLOT_IDS.size()):
+		var slot_rect := _equip_slot_rect_by_idx(i)
+		if slot_rect.has_point(point):
+			var slot_id: String = EquipmentSystem.SLOT_IDS[i]
+			return {"panel": "equip", "slot_id": slot_id, "slot_idx": i, "rect": slot_rect}
+	return {}
+
+func _draw_equipment_panel() -> void:
+	if not inventory_open or equipment_system == null:
+		return
+	var panel := _equip_panel_rect()
+	_panel(panel)
+	var font := get_theme_default_font()
+	if font != null:
+		draw_string(font, panel.position + Vector2(PANEL_PADDING, 19),
+			"Equipment", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 15, Color8(244, 231, 192))
+	for i in range(EquipmentSystem.SLOT_IDS.size()):
+		var slot_id: String = EquipmentSystem.SLOT_IDS[i]
+		var slot_rect  := _equip_slot_rect_by_idx(i)
+		var item_id    := equipment_system.get_item(slot_id)
+		var is_dragged := (not drag_source.is_empty()
+			and String(drag_source.get("panel", "")) == "equip"
+			and String(drag_source.get("slot_id", "")) == slot_id)
+		var is_hovered := _hovered_equip_slot == slot_id
+		var bg     := Color(0.14, 0.12, 0.16, 0.95) if is_hovered else Color(0.08, 0.075, 0.085, 0.92)
+		var border := Color8(160, 160, 180) if is_hovered else Color8(91, 100, 107)
+		draw_rect(slot_rect, bg, true)
+		draw_rect(slot_rect, border, false, 1.0)
+		if item_id != "" and not is_dragged:
+			_draw_stack({"item": item_id, "count": 1, "stack_cap": 1}, slot_rect)
+		elif item_id == "" and font != null:
+			# Faint abbreviation hint inside empty slot
+			var abbr := slot_id.substr(0, 2).to_upper()
+			draw_string(font,
+				slot_rect.get_center() + Vector2(-5.0, 4.0),
+				abbr, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color8(75, 82, 90))
+		# Slot label to the right
+		if font != null:
+			var label := slot_id.replace("_", " ").capitalize()
+			draw_string(font,
+				Vector2(slot_rect.position.x + SLOT_SIZE + 6.0, slot_rect.get_center().y + 5.0),
+				label, HORIZONTAL_ALIGNMENT_LEFT,
+				EQUIP_PANEL_W - PANEL_PADDING - SLOT_SIZE - 8.0,
+				10, Color8(190, 180, 155))

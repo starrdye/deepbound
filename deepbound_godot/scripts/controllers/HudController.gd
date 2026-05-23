@@ -399,7 +399,10 @@ func _handle_mouse_release(point: Vector2) -> bool:
 
 func _player_panel_rect() -> Rect2:
 	var rows := ceili(float(player_inventory.slots.size() if player_inventory != null else 24) / float(PLAYER_COLS))
-	return _panel_rect(Vector2(64, 132), PLAYER_COLS, rows)
+	# Shift right to make room for the crafting panel when it is visible (inventory
+	# open, no container).  8px left margin + panel width + 8px gap = 164px.
+	var origin_x := (8.0 + CRAFT_PANEL_W + 8.0) if (inventory_open and not container_open) else 64.0
+	return _panel_rect(Vector2(origin_x, 132), PLAYER_COLS, rows)
 
 func _container_panel_rect() -> Rect2:
 	var rows := ceili(float(container_inventory.slots.size() if container_inventory != null else 18) / float(CONTAINER_COLS))

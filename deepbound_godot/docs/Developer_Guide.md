@@ -20,7 +20,8 @@
    - 4.8 [Procedural Generation & Prefabs](#48-procedural-generation--prefabs)
    - 4.9 [Health & Hearts](#49-health--hearts)
    - 4.10 [Mining](#410-mining)
-   - 4.11 [Save / Load](#411-save--load)
+   - 4.11 [Debug Terminal](#411-debug-terminal)
+   - 4.12 [Save / Load](#412-save--load)
 5. [Adding New Content](#5-adding-new-content)
    - 5.1 [New regular item](#51-new-regular-item)
    - 5.2 [New equippable item](#52-new-equippable-item)
@@ -332,7 +333,26 @@ Recipe entries:
 
 ### 4.4 NPCs, Dialogue & Vendors
 
-**Files:** `scripts/catalogs/NPCCatalog.gd`, `DialogueCatalog.gd`, `VendorCatalog.gd`, `scripts/controllers/NpcController.gd`
+**Files:** `scripts/catalogs/NPCCatalog.gd`, `DialogueCatalog.gd`, `VendorCatalog.gd`,
+`scripts/controllers/NpcController.gd`
+
+#### NPC visuals — goblin sprite sheets
+
+`NpcController` renders using goblin enemy sprite sheets (32×32, 8 frames × 4 rows).
+Row 0 is the idle animation, which plays at a slower FPS than combat enemies to give a relaxed feel:
+
+```gdscript
+# In NpcController:
+const NPC_SPRITE_MAP := {
+    "wandering_merchant": "goblin_shaman",
+    "old_miner":          "goblin_grunt",
+    "cave_hermit":        "goblin_slinger",
+}
+```
+
+The sheet is loaded via `TextureFactory.make_enemy_texture(sprite_id)`. If the PNG is missing, a coloured capsule fallback is drawn. To change an NPC's appearance, update `NPC_SPRITE_MAP`.
+
+NPC origin is at the feet (same convention as `EnemyController`). The name label and interaction hint both derive their Y offsets from `LABEL_Y = -(SPRITE_FRAME_SIZE.y + 8.0)`.
 
 #### Spawning
 
@@ -538,7 +558,85 @@ When `result.broke` is true, the tile becomes `"air"` in `ChunkStore` and drop i
 
 ---
 
-### 4.11 Save / Load
+### 4.11 Debug Terminal
+
+**Files:** `scripts/systems/TerminalSystem.gd`, `scripts/controllers/HudController.gd` (terminal section), `scripts/Main.gd` (`_on_terminal_command`)
+
+#### Architecture
+
+```
+Backtick key
+  → Main._unhandled_input()
+  → hud.toggle_terminal()
+  → TerminalSystem.is_open = true
+  → LineEdit visible + focused
+
+Player types command + Enter
+  → HudController._on_terminal_submitted(text)
+  → TerminalSystem.push_output("> " + text)   ← echo
+  → terminal_command signal emitted
+  → Main._on_terminal_command(cmd)
+      → executes command
+      → TerminalSystem.push_output("[OK]/[ERR] ...")
+      → hud.queue_redraw()   ← updates output panel
+
+Backtick key again
+  → hud.toggle_terminal()
+  → TerminalSystem.is_open = false
+  → LineEdit hidden
+```
+
+The terminal **does not close on Enter**. The output panel draws the last 8 history lines above the input strip, colour-coded by prefix.
+
+#### TerminalSystem state
+
+`TerminalSystem` is a static singleton (no instantiation needed):
+
+```gdscript
+TerminalSystem.push_output("[OK] Something happened")
+TerminalSystem.is_open          # bool
+TerminalSystem.history          # Array of strings
+TerminalSystem.clear_history()
+```
+
+#### Adding a new command
+
+1. Open `scripts/Main.gd`, find `_on_terminal_command()`.
+2. Add a new `match` branch:
+
+```gdscript
+"mycommand":
+    if parts.size() < 2:
+        TerminalSystem.push_output("[ERR] Usage: mycommand <arg>")
+    else:
+        var arg := parts[1]
+        # … do the work …
+        TerminalSystem.push_output("[OK] Did the thing: %s" % arg)
+```
+
+3. Add a help line in the `"help"` branch:
+
+```gdscript
+TerminalSystem.push_output("  mycommand <arg> — description of what it does")
+```
+
+4. Document it in `docs/Gameplay.md` under the Debug Terminal commands table.
+
+#### Current commands
+
+| Command | Implementation | Effect |
+|---------|---------------|--------|
+| `god` | `DebugSystem.toggle_god_mode()` | Invincible + fly |
+| `heal` | `player.heal(max_health)` | Full HP restore |
+| `tp <1\|2\|3>` | `_teleport_to_band(tile_y)` | Jump to band |
+| `give <id> [n]` | `player.inventory.add_item(id, n)` | Add items |
+| `spawn <enemy_id>` | `_spawn_enemy(id, pos)` | Spawn enemy |
+| `npc <npc_id>` | `_spawn_npc(id, pos)` | Spawn friendly NPC |
+| `kill` | `queue_free` all enemy children | Remove enemies |
+| `clear` | `TerminalSystem.clear_history()` | Clear output |
+| `help` | `push_output` each line | Print command list |
+
+### 4.12 Save / Load
 
 **File:** `scripts/systems/SaveGameSystem.gd`
 

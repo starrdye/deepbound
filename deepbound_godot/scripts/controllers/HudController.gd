@@ -35,7 +35,11 @@ const CONTAINER_COLS := 6
 const HOTBAR_SIZE := 6
 const HOTBAR_MARGIN_BOTTOM := 14.0
 
-const TERMINAL_H := 32.0  # height of the plain grey input rectangle
+const TERMINAL_INPUT_H     := 28.0   # height of the LineEdit input strip
+const TERMINAL_LINE_H      := 16.0   # height of one output line
+const TERMINAL_VISIBLE_LINES := 8    # lines shown in the output panel
+const TERMINAL_OUTPUT_H    := TERMINAL_VISIBLE_LINES * TERMINAL_LINE_H + 8.0
+const TERMINAL_H           := TERMINAL_INPUT_H  # kept for any legacy references
 
 const TOOLTIP_PAD := 10.0
 const TOOLTIP_NAME_SZ := 14
@@ -265,6 +269,8 @@ func _draw() -> void:
 	_draw_tooltip()
 	_draw_craft_tooltip()
 	_draw_dialogue_panel()
+	if TerminalSystem.is_open:
+		_draw_terminal_output()
 
 func _draw_hearts(origin: Vector2) -> void:
 	var states: Array = hud_state.get(
@@ -281,27 +287,41 @@ func _draw_hearts(origin: Vector2) -> void:
 			var fallback_color := Color8(201, 78, 78) if frame == 0 else Color8(82, 36, 46)
 			draw_rect(target, fallback_color, true)
 
-## ── Terminal console (minimal — plain grey LineEdit rectangle) ───────────────
+## ── Terminal console ──────────────────────────────────────────────────────────
+## Layout (bottom of screen, above the hotbar):
+##   ┌─────────────────────────────────────┐  ← output panel (TERMINAL_OUTPUT_H)
+##   │  > give iron_helm 1                 │
+##   │  [OK] Added 1 × iron_helm           │
+##   │  ...                                │
+##   ├─────────────────────────────────────┤
+##   │  > _                                │  ← LineEdit input (TERMINAL_INPUT_H)
+##   └─────────────────────────────────────┘
+##
+## Pressing Enter executes the command and keeps the terminal open.
+## The terminal closes only when the player presses ` again.
 
 func _build_terminal() -> void:
-	## Create a plain LineEdit that sits just above the hotbar.
-	## Godot's default theme renders it as a grey rectangle — exactly what we want.
 	_terminal_line_edit = LineEdit.new()
 	_terminal_line_edit.visible = false
-	_terminal_line_edit.placeholder_text = "command  (help for list, ESC to close)"
+	_terminal_line_edit.placeholder_text = "> type a command  (help for list)"
 	_terminal_line_edit.mouse_filter = MOUSE_FILTER_STOP
 	_terminal_line_edit.text_submitted.connect(_on_terminal_submitted)
 	add_child(_terminal_line_edit)
 
+func _terminal_input_y() -> float:
+	var vsize := get_viewport_rect().size
+	return vsize.y - SLOT_SIZE - HOTBAR_MARGIN_BOTTOM - TERMINAL_INPUT_H - 6.0
+
 func open_terminal() -> void:
 	TerminalSystem.is_open = true
 	var vsize := get_viewport_rect().size
-	var y := vsize.y - SLOT_SIZE - HOTBAR_MARGIN_BOTTOM - TERMINAL_H - 6.0
+	var y := _terminal_input_y()
 	_terminal_line_edit.position = Vector2(0.0, y)
-	_terminal_line_edit.size    = Vector2(vsize.x, TERMINAL_H)
-	_terminal_line_edit.visible = true
+	_terminal_line_edit.size     = Vector2(vsize.x, TERMINAL_INPUT_H)
+	_terminal_line_edit.visible  = true
 	_terminal_line_edit.clear()
 	_terminal_line_edit.grab_focus()
+	queue_redraw()
 
 func close_terminal() -> void:
 	TerminalSystem.is_open = false
@@ -317,8 +337,52 @@ func toggle_terminal() -> void:
 
 func _on_terminal_submitted(text: String) -> void:
 	text = text.strip_edges()
+	if text.is_empty():
+		return
+	# Echo the command into history so the output panel shows what was typed.
+	TerminalSystem.push_output("> " + text)
 	terminal_command.emit(text)
-	close_terminal()
+	_terminal_line_edit.clear()
+	_terminal_line_edit.grab_focus()
+	queue_redraw()
+
+## Draw the output panel above the input strip.
+func _draw_terminal_output() -> void:
+	var vsize  := get_viewport_rect().size
+	var input_y := _terminal_input_y()
+	var panel_h  := TERMINAL_OUTPUT_H
+	var panel_rect := Rect2(0.0, input_y - panel_h - 2.0, vsize.x, panel_h)
+
+	# Dark translucent background + subtle border
+	draw_rect(panel_rect, Color(0.04, 0.04, 0.07, 0.92), true)
+	draw_rect(panel_rect, Color8(55, 75, 90, 200), false, 1.0)
+
+	var font := get_theme_default_font()
+	if font == null:
+		return
+
+	# Show the most recent lines, newest at the bottom
+	var count := mini(TerminalSystem.history.size(), TERMINAL_VISIBLE_LINES)
+	var start  := TerminalSystem.history.size() - count
+	for i in range(count):
+		var line := String(TerminalSystem.history[start + i])
+		var baseline := panel_rect.position.y + 6.0 + (i + 1) * TERMINAL_LINE_H - 3.0
+		draw_string(font,
+			Vector2(10.0, baseline),
+			line,
+			HORIZONTAL_ALIGNMENT_LEFT, -1.0, 12,
+			_terminal_line_colour(line)
+		)
+
+func _terminal_line_colour(line: String) -> Color:
+	if line.begins_with("[ERR]"):
+		return Color8(255, 90, 70)
+	if line.begins_with("[OK]"):
+		return Color8(80, 220, 110)
+	if line.begins_with(">"):
+		return Color8(160, 210, 255)
+	# Plain info lines (help list, etc.)
+	return Color8(190, 200, 205)
 
 ## ─────────────────────────────────────────────────────────────────────────────
 

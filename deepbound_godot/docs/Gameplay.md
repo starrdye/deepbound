@@ -32,6 +32,7 @@ The Delver starts in Band 1 near a test chest and a starter cave skitter encount
 | Flare | `Q` |
 | Beacon | `R` |
 | Prototype band jumps | `F1`, `F2`, `F3` |
+| Debug terminal | `` ` `` (backtick) — toggle open/close |
 
 Focus-loss protection clears transient input when the app window loses or regains focus, so returning to the game should not leave the Delver stuck walking in one direction.
 
@@ -114,11 +115,54 @@ Dropping the wrong item type onto a slot silently rejects the drop — the item 
 
 ---
 
+## Debug Terminal
+
+Press `` ` `` (backtick) to open the debug console. Press `` ` `` again to close it. The terminal **stays open after pressing Enter** so you can run multiple commands without reopening it.
+
+### Output panel
+
+The terminal shows the last 8 lines of output above the input field. Lines are colour-coded:
+
+| Colour | Meaning |
+|--------|---------|
+| Blue-white `>` | Echoed command |
+| Green `[OK]` | Success |
+| Red `[ERR]` | Error or bad usage |
+| Light grey | Info (help list, etc.) |
+
+### Commands
+
+| Command | Effect |
+|---------|--------|
+| `god` | Toggle god mode — player becomes invincible and can fly through blocks |
+| `heal` | Restore player to full HP |
+| `tp <1\|2\|3>` | Teleport to Band 1, 2, or 3 |
+| `give <item_id> [count]` | Add items directly to inventory (e.g. `give crystal_helm`) |
+| `spawn <enemy_id>` | Spawn an enemy near the player (e.g. `spawn goblin_grunt`) |
+| `npc <npc_id>` | Spawn a friendly NPC near the player (e.g. `npc wandering_merchant`) |
+| `kill` | Remove all active enemies from the world |
+| `clear` | Clear the output history |
+| `help` | Print the full command list |
+
+**God mode** makes the player immune to all damage and allows free vertical movement (fly/noclip). Toggle it off by running `god` a second time — the gold **GOD MODE ON** button in the top-right corner shows the current state.
+
+---
+
 ## NPCs and Dialogue
 
 ### Finding NPCs
 
-NPCs spawn deterministically near settlement areas. Walk close to one and a **`[T] Talk`** hint floats above their name. The hint disappears when you move out of range.
+Three friendly NPCs spawn right next to the player start position each session:
+
+| NPC | Goblin model | Position |
+|-----|-------------|----------|
+| Wandering Merchant | Goblin Shaman | +48 px right of spawn |
+| Old Miner | Goblin Grunt | −48 px left of spawn |
+| Cave Hermit | Goblin Slinger | +96 px right of spawn |
+
+NPCs use goblin sprite sheets for their visuals and play a slow idle animation. Walk close to one and a **`[T] Talk`** hint floats above their name. The hint disappears when you move out of range.
+
+Additional NPCs can be spawned via the debug terminal: `npc <npc_id>`.
 
 ### Talking
 

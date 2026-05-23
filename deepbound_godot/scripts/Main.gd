@@ -146,12 +146,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			hud.toggle_terminal()
 		get_viewport().set_input_as_handled()
 		return
-	# When terminal is open: ESC closes it; all other events are swallowed so
-	# the game does not act on keyboard/mouse input while the player is typing.
+	# When terminal is open: swallow all events so the game does not respond to
+	# keyboard/mouse input while the player is typing.  The terminal closes
+	# only when the user presses ` again (handled above via toggle_terminal).
 	if TerminalSystem.is_open:
-		if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-			if hud != null and hud.has_method("close_terminal"):
-				hud.close_terminal()
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("pause_menu"):
@@ -773,7 +771,18 @@ func _on_terminal_command(cmd: String) -> void:
 				var enemy_id: String = parts[1]
 				if is_instance_valid(player):
 					_spawn_enemy(enemy_id, player.global_position + Vector2(96, 0))
-					TerminalSystem.push_output("[OK] Spawned %s" % enemy_id)
+					TerminalSystem.push_output("[OK] Spawned enemy: %s" % enemy_id)
+				else:
+					TerminalSystem.push_output("[ERR] Player not available")
+		"npc":
+			if parts.size() < 2:
+				TerminalSystem.push_output("[ERR] Usage: npc <npc_id>")
+				TerminalSystem.push_output("  IDs: wandering_merchant  old_miner  cave_hermit")
+			else:
+				var npc_id_cmd: String = parts[1]
+				if is_instance_valid(player):
+					_spawn_npc(npc_id_cmd, player.global_position + Vector2(80.0, 0.0))
+					TerminalSystem.push_output("[OK] Spawned NPC: %s" % npc_id_cmd)
 				else:
 					TerminalSystem.push_output("[ERR] Player not available")
 		"kill":
@@ -790,6 +799,7 @@ func _on_terminal_command(cmd: String) -> void:
 			TerminalSystem.push_output("  tp <1|2|3>       — teleport to band number")
 			TerminalSystem.push_output("  give <id> [n]    — add n of item to inventory")
 			TerminalSystem.push_output("  spawn <enemy_id> — spawn enemy near player")
+			TerminalSystem.push_output("  npc <npc_id>     — spawn friendly NPC near player")
 			TerminalSystem.push_output("  kill             — remove all active enemies")
 			TerminalSystem.push_output("  clear            — clear this console")
 			TerminalSystem.push_output("  help             — show this list")
@@ -1044,10 +1054,11 @@ func _hud_light_for_tile(player_tile: Vector2i) -> float:
 func _spawn_friendly_npcs() -> void:
 	if not is_instance_valid(player):
 		return
-	# Spawn NPCs offset from the player start so they're immediately nearby.
-	_spawn_npc("wandering_merchant", player.global_position + Vector2(130.0,  0.0))
-	_spawn_npc("old_miner",          player.global_position + Vector2(-130.0, 0.0))
-	_spawn_npc("cave_hermit",        player.global_position + Vector2(260.0,  0.0))
+	# Spawn NPCs tightly around the player start position so they are
+	# immediately visible and reachable.
+	_spawn_npc("wandering_merchant", player.global_position + Vector2( 48.0, 0.0))
+	_spawn_npc("old_miner",          player.global_position + Vector2(-48.0, 0.0))
+	_spawn_npc("cave_hermit",        player.global_position + Vector2( 96.0, 0.0))
 
 func _spawn_npc(npc_id: String, world_pos: Vector2) -> void:
 	if npcs_node == null:

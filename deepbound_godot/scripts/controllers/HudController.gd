@@ -679,7 +679,7 @@ func receive_crafted_item(stack: Dictionary) -> void:
 		drag_state_changed.emit(true)
 		queue_redraw()
 		return
-	var remaining := player_inventory.add_item(String(stack.item), int(stack.count))
+	var remaining: int = player_inventory.add_item(String(stack.item), int(stack.count))
 	if remaining > 0:
 		var leftover := stack.duplicate()
 		leftover.count = remaining
@@ -849,7 +849,7 @@ func _rebuild_craft_tooltip(recipe_id: String, font: Font) -> void:
 	for ing in recipe.get("ingredients", []):
 		var ing_id    := String(ing.item)
 		var ing_count := int(ing.count)
-		var have := player_inventory.count_item(ing_id) if player_inventory != null else 0
+		var have: int = player_inventory.count_item(ing_id) if player_inventory != null else 0
 		var ing_def   := ItemCatalog.get_item(ing_id)
 		var ing_name  := String(ing_def.get("name", ing_id.replace("_", " ").capitalize()))
 		var line_col  := Color8(100, 220, 100) if have >= ing_count else Color8(220, 80, 80)

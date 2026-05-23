@@ -28,6 +28,8 @@ const LootDropScene         = preload("res://scenes/LootDrop.tscn")
 const LootDropController    = preload("res://scripts/controllers/LootDropController.gd")
 const EnemyCatalog          = preload("res://scripts/catalogs/EnemyCatalog.gd")
 const ModifierCatalog       = preload("res://scripts/catalogs/ModifierCatalog.gd")
+const StatusEffectCatalog   = preload("res://scripts/catalogs/StatusEffectCatalog.gd")
+const StatusManager         = preload("res://scripts/components/StatusManager.gd")
 
 const TEST_CHEST_OFFSET := Vector2(64, -16)
 const TEST_CHEST_OPEN_DISTANCE := 46.0
@@ -67,6 +69,7 @@ var bosses_node: Node2D = null
 var boss_ui: CanvasLayer = null
 
 var equipment_system: EquipmentSystem = null
+var player_status_manager = null   # StatusManager node attached to player
 var current_encounter_band := ""
 var active_container
 var selected_hotbar_index := 0
@@ -132,6 +135,13 @@ func _ready() -> void:
 	equipment_system.equipment_changed.connect(_on_equipment_changed)
 	if hud.has_method("set_equipment_system"):
 		hud.set_equipment_system(equipment_system)
+	# Create a StatusManager for the player and wire its signal.
+	player_status_manager = StatusManager.new()
+	player_status_manager.name = "StatusManager"
+	player.add_child(player_status_manager)
+	player_status_manager.status_changed.connect(_on_status_changed)
+	if hud.has_method("set_status_manager"):
+		hud.set_status_manager(player_status_manager)
 	world.player = player
 	world.container_parent = props_node
 	if world.has_signal("chest_broken") and not world.chest_broken.is_connected(_on_chest_broken):
@@ -920,6 +930,28 @@ func _on_terminal_command(cmd: String) -> void:
 					TerminalSystem.push_output("[OK] Applied '%s' to %s in slot '%s'" % [mod_id, item_id_in_slot, slot_id])
 				else:
 					TerminalSystem.push_output("[ERR] Could not apply modifier")
+		"buff", "debuff":
+			if parts.size() < 2:
+				TerminalSystem.push_output("[ERR] Usage: %s <effect_id>" % verb)
+				TerminalSystem.push_output("  Buffs:   swiftness endurance fervor fortitude vigor")
+				TerminalSystem.push_output("  Debuffs: slow vulnerable weakness curse frail")
+			elif not is_instance_valid(player) or player_status_manager == null:
+				TerminalSystem.push_output("[ERR] Player not available")
+			else:
+				var fx_id := parts[1]
+				if not StatusEffectCatalog.is_valid(fx_id):
+					TerminalSystem.push_output("[ERR] Unknown effect: %s" % fx_id)
+				else:
+					var eff = StatusEffectCatalog.make(fx_id)
+					player_status_manager.apply_effect(eff)
+					var dur_str := ("permanent" if eff.duration <= 0.0 else "%.0fs" % eff.duration)
+					TerminalSystem.push_output("[OK] Applied '%s' (%s)" % [eff.display_name, dur_str])
+		"clearfx":
+			if player_status_manager == null:
+				TerminalSystem.push_output("[ERR] Player not available")
+			else:
+				player_status_manager.clear_all()
+				TerminalSystem.push_output("[OK] All status effects cleared")
 		"kill":
 			var count_killed := enemies_node.get_child_count() if enemies_node != null else 0
 			if enemies_node != null:
@@ -941,6 +973,9 @@ func _on_terminal_command(cmd: String) -> void:
 			TerminalSystem.push_output("  respawn npc <npc_id>        — spawn friendly NPC near player")
 			TerminalSystem.push_output("  respawn boss <id|1>         — reset + spawn boss (clears defeated)")
 			TerminalSystem.push_output("  modifier <mod> [slot]       — apply modifier to equipped item")
+			TerminalSystem.push_output("  buff <effect_id>            — apply buff  (swiftness endurance fervor …)")
+			TerminalSystem.push_output("  debuff <effect_id>          — apply debuff (slow vulnerable curse …)")
+			TerminalSystem.push_output("  clearfx                     — remove all active status effects")
 			TerminalSystem.push_output("  kill                        — remove all active enemies & bosses")
 			TerminalSystem.push_output("  clear                       — clear this console")
 			TerminalSystem.push_output("  help                        — show this list")
@@ -1284,3 +1319,14 @@ func _on_equipment_changed() -> void:
 	var utility_radius := StatCalculator.get_utility_light_radius(equipment_system)
 	if world != null and world.has_method("set_player_utility_light"):
 		world.set_player_utility_light(utility_radius)
+
+## Called whenever the player's StatusManager reports a change.
+## Recomputes status-derived stats and pushes them to the player.
+func _on_status_changed() -> void:
+	if player_status_manager == null or player == null:
+		return
+	var status_stats: Dictionary = player_status_manager.get_stat_totals()
+	if player.has_method("set_status_stats"):
+		player.set_status_stats(status_stats)
+	if hud != null:
+		hud.queue_redraw()

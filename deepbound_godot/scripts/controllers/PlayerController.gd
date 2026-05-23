@@ -88,8 +88,11 @@ var held_item_texture: Texture2D
 var weapon_ready_texture: Texture2D
 var controls_locked := false
 var _was_god_mode := false
-var equipment_speed_bonus := 0.0
+var equipment_speed_bonus   := 0.0
 var equipment_defense_bonus := 0
+var status_speed_bonus      := 0.0
+var status_defense_bonus    := 0
+var status_health_delta     := 0
 
 @onready var sprite: Sprite2D = $Sprite2D
 var weapon_sprite: Sprite2D
@@ -165,7 +168,7 @@ func _physics_process(delta: float) -> void:
 func _physics_process_normal(delta: float) -> void:
 	var input_axis := 0.0 if controls_locked else Input.get_axis("move_left", "move_right")
 	if input_axis != 0.0:
-		velocity.x = move_toward(velocity.x, input_axis * MAX_SPEED * (1.0 + equipment_speed_bonus), MOVE_ACCEL * delta)
+		velocity.x = move_toward(velocity.x, input_axis * MAX_SPEED * (1.0 + equipment_speed_bonus + status_speed_bonus), MOVE_ACCEL * delta)
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, FRICTION * delta)
 	if _is_jump_requested() and on_ground:
@@ -558,7 +561,7 @@ func damage(amount: int, impulse: Vector2) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	if now < invulnerable_until:
 		return
-	var mitigated := maxi(0, amount - equipment_defense_bonus)
+	var mitigated := maxi(0, amount - equipment_defense_bonus - status_defense_bonus)
 	health = HeartSystem.clamp_hp(health - mitigated, max_health)
 	invulnerable_until = now + 0.8
 	velocity += impulse
@@ -569,7 +572,7 @@ func damage(amount: int, impulse: Vector2) -> void:
 
 func set_equipment_health_delta(delta_hp: int) -> void:
 	equipment_health_delta = delta_hp
-	max_health = HeartSystem.resolve_max_hp(base_max_health, equipment_health_delta)
+	max_health = HeartSystem.resolve_max_hp(base_max_health, equipment_health_delta + status_health_delta)
 	health = HeartSystem.clamp_hp(health, max_health)
 
 func set_equipment_speed_bonus(bonus: float) -> void:
@@ -577,6 +580,15 @@ func set_equipment_speed_bonus(bonus: float) -> void:
 
 func set_equipment_defense_bonus(bonus: int) -> void:
 	equipment_defense_bonus = bonus
+
+## Apply the combined stat totals returned by StatusManager.get_stat_totals().
+## Called from Main._on_status_changed() whenever active effects change.
+func set_status_stats(stats: Dictionary) -> void:
+	status_speed_bonus   = float(stats.get("speed", 0.0))
+	status_defense_bonus = int(stats.get("defense", 0))
+	status_health_delta  = int(stats.get("health_max", 0))
+	max_health = HeartSystem.resolve_max_hp(base_max_health, equipment_health_delta + status_health_delta)
+	health = HeartSystem.clamp_hp(health, max_health)
 
 func heal(amount: int) -> void:
 	health = HeartSystem.clamp_hp(health + amount, max_health)

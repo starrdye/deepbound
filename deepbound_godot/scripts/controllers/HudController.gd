@@ -109,6 +109,16 @@ const VENDOR_PANEL_W       := 200.0
 ## ── Equipment panel constants ─────────────────────────────────────────────
 const EQUIP_PANEL_W := 148.0
 
+## ── BuffUI constants ──────────────────────────────────────────────────────
+## Size of each buff icon (px).
+const BUFF_ICON_SZ     := 16.0
+## Horizontal gap between icons (px).
+const BUFF_ICON_GAP    := 3.0
+## Y origin of the buff icon row (screen coords, inside the top HUD panel).
+const BUFF_ROW_Y       := 36.0
+## X origin of the buff icon row.
+const BUFF_ROW_X       := 20.0
+
 ## ── Dialogue state ────────────────────────────────────────────────────────
 var _dialogue_open: bool = false
 var _dialogue_npc_id: String = ""
@@ -131,6 +141,11 @@ var _hovered_vendor_idx: int = -1
 var equipment_system = null
 var _hovered_equip_slot: String = ""
 
+## ── StatusManager reference (for BuffUI) ──────────────────────────────────
+var _status_manager = null
+## Index of the buff icon currently hovered (-1 = none).
+var _hovered_buff_index: int = -1
+
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_PASS
@@ -145,6 +160,9 @@ func _ready() -> void:
 
 func set_equipment_system(eq_sys) -> void:
 	equipment_system = eq_sys
+
+func set_status_manager(sm) -> void:
+	_status_manager = sm
 
 func open_inventory(player_inv) -> void:
 	player_inventory = player_inv
@@ -184,11 +202,12 @@ func close_inventory() -> void:
 	container_inventory = null
 	_vendor_open = false
 	_vendor_shop_id = ""
-	_hovered_item_id = ""
-	_hovered_stack   = {}
-	_hovered_craft_id = ""
+	_hovered_item_id    = ""
+	_hovered_stack      = {}
+	_hovered_craft_id   = ""
 	_hovered_vendor_idx = -1
 	_hovered_equip_slot = ""
+	_hovered_buff_index = -1
 	queue_redraw()
 
 func _flush_cursor_stack() -> void:
@@ -263,6 +282,7 @@ func _draw() -> void:
 	_panel(Rect2(size.x - 180, 10, 160, 44))
 	_draw_god_mode_button()
 	_draw_hearts(Vector2(20, 16))
+	_draw_buffs()
 	_draw_hotbar()
 	if inventory_open:
 		_draw_inventory_panel(_player_panel_rect(), "Inventory", player_inventory, PLAYER_COLS, "player")
@@ -295,6 +315,132 @@ func _draw_hearts(origin: Vector2) -> void:
 		else:
 			var fallback_color := Color8(201, 78, 78) if frame == 0 else Color8(82, 36, 46)
 			draw_rect(target, fallback_color, true)
+
+## ── BuffUI ────────────────────────────────────────────────────────────────────
+
+## Returns the Rect2 for buff icon at the given list index.
+func _buff_icon_rect(index: int) -> Rect2:
+	var x := BUFF_ROW_X + float(index) * (BUFF_ICON_SZ + BUFF_ICON_GAP)
+	return Rect2(Vector2(x, BUFF_ROW_Y), Vector2(BUFF_ICON_SZ, BUFF_ICON_SZ))
+
+## Returns the index of the buff icon under point, or -1 if none.
+func _buff_index_at(point: Vector2) -> int:
+	if _status_manager == null or not _status_manager.has_method("get_active"):
+		return -1
+	var active: Array = _status_manager.get_active()
+	for i in range(active.size()):
+		if _buff_icon_rect(i).has_point(point):
+			return i
+	return -1
+
+## Draw active buff/debuff icons in a row below the heart bar.
+func _draw_buffs() -> void:
+	if _status_manager == null or not _status_manager.has_method("get_active"):
+		return
+	var active: Array = _status_manager.get_active()
+	if active.is_empty():
+		return
+	var font := get_theme_default_font()
+	for i in range(active.size()):
+		var eff = active[i]
+		var rect := _buff_icon_rect(i)
+		var is_debuff: bool = bool(eff.is_debuff)
+		var border_col := Color8(220, 80, 80) if is_debuff else Color8(80, 180, 255)
+		var bg_col     := Color8(40, 10, 10, 200) if is_debuff else Color8(10, 30, 50, 200)
+		# Background
+		draw_rect(rect, bg_col, true)
+		# Icon texture or fallback letter
+		if eff.icon != null:
+			draw_texture_rect(eff.icon, rect, false)
+		else:
+			# Draw first letter of display_name as fallback
+			var letter := String(eff.display_name).left(1).to_upper()
+			var text_col := Color8(220, 100, 100) if is_debuff else Color8(140, 210, 255)
+			if font != null:
+				draw_string(font, rect.position + Vector2(4.0, 13.0), letter,
+					HORIZONTAL_ALIGNMENT_LEFT, -1, 11, text_col)
+		# Hover highlight
+		if i == _hovered_buff_index:
+			draw_rect(rect, Color(1.0, 1.0, 1.0, 0.18), true)
+		# Border — thicker for debuffs
+		draw_rect(rect, border_col, false, 1.5)
+		# Duration pip: thin bottom bar showing time remaining
+		if eff.duration > 0.0 and eff.duration <= 60.0:
+			# Map 60→0 remaining to a fill ratio
+			var fill := clampf(eff.duration / 60.0, 0.0, 1.0)
+			var pip_y := rect.position.y + rect.size.y - 2.0
+			var pip_bg  := Rect2(Vector2(rect.position.x, pip_y), Vector2(BUFF_ICON_SZ, 2.0))
+			var pip_bar := Rect2(Vector2(rect.position.x, pip_y), Vector2(BUFF_ICON_SZ * fill, 2.0))
+			draw_rect(pip_bg,  Color(0.1, 0.1, 0.1, 0.6), true)
+			draw_rect(pip_bar, border_col, true)
+	# Tooltip for hovered icon
+	if _hovered_buff_index >= 0 and _hovered_buff_index < active.size() and font != null:
+		_draw_buff_tooltip(active[_hovered_buff_index], font)
+
+## Draw a small tooltip for the hovered buff icon.
+func _draw_buff_tooltip(eff, font: Font) -> void:
+	if eff == null:
+		return
+	var is_debuff: bool = bool(eff.is_debuff)
+	var border_col := Color8(220, 80, 80) if is_debuff else Color8(80, 180, 255)
+	var lines: Array[Dictionary] = []
+
+	# Title line
+	lines.append({"text": String(eff.display_name), "size": TOOLTIP_NAME_SZ,
+		"color": border_col})
+	# Duration line
+	var dur_text: String
+	if float(eff.duration) <= 0.0:
+		dur_text = "Permanent"
+	else:
+		dur_text = "%.1fs remaining" % float(eff.duration)
+	lines.append({"text": dur_text, "size": TOOLTIP_BODY_SZ,
+		"color": Color8(180, 180, 180)})
+	# Stat lines
+	var mods: Dictionary = eff.stat_modifiers
+	for key in ["damage", "defense", "health_max", "speed"]:
+		if not mods.has(key):
+			continue
+		var val = mods[key]
+		var positive: bool = (float(val) > 0.0) != is_debuff
+		var stat_col := Color8(100, 220, 100) if positive else Color8(220, 80, 80)
+		var line_str: String
+		match key:
+			"damage":     line_str = "Damage %+d" % int(val)
+			"defense":    line_str = "Defense %+d" % int(val)
+			"health_max": line_str = "Max HP %+d" % int(val)
+			"speed":      line_str = "Move Speed %+d%%" % roundi(float(val) * 100.0)
+		lines.append({"text": line_str, "size": TOOLTIP_BODY_SZ, "color": stat_col})
+
+	# Measure panel
+	var max_w := 0.0
+	for ld in lines:
+		var w := font.get_string_size(String(ld.text), HORIZONTAL_ALIGNMENT_LEFT, -1, int(ld.size)).x
+		if w > max_w:
+			max_w = w
+	var panel_w := max_w + TOOLTIP_PAD * 2.0
+	var panel_h := TOOLTIP_PAD * 2.0
+	for ld in lines:
+		panel_h += float(ld.size) + TOOLTIP_LINE_GAP
+
+	# Position near hovered icon (above it)
+	var icon_rect := _buff_icon_rect(_hovered_buff_index)
+	var vsize := get_viewport_rect().size
+	var px := clampf(icon_rect.position.x, 4.0, vsize.x - panel_w - 4.0)
+	var py := clampf(icon_rect.position.y - panel_h - 6.0, 4.0, vsize.y - panel_h - 4.0)
+	var panel_rect := Rect2(Vector2(px, py), Vector2(panel_w, panel_h))
+
+	draw_rect(Rect2(panel_rect.position + Vector2(3.0, 3.0), panel_rect.size),
+		Color(0, 0, 0, 0.4), true)
+	draw_rect(panel_rect, Color(0.04, 0.04, 0.09, 0.96), true)
+	draw_rect(panel_rect, border_col, false, 1.5)
+
+	var cy := py + TOOLTIP_PAD
+	for ld in lines:
+		var sz := int(ld.size)
+		draw_string(font, Vector2(px + TOOLTIP_PAD, cy + sz),
+			String(ld.text), HORIZONTAL_ALIGNMENT_LEFT, -1, sz, ld.color)
+		cy += float(sz) + TOOLTIP_LINE_GAP
 
 ## ── Terminal console ──────────────────────────────────────────────────────────
 ## Layout (bottom of screen, above the hotbar):
@@ -520,6 +666,13 @@ func _gui_input(event: InputEvent) -> void:
 				_hovered_vendor_idx = new_vendor_idx
 				needs_redraw = true
 			elif _hovered_vendor_idx >= 0:
+				needs_redraw = true
+			# Buff icon hover
+			var new_buff_idx := _buff_index_at(event.position)
+			if new_buff_idx != _hovered_buff_index:
+				_hovered_buff_index = new_buff_idx
+				needs_redraw = true
+			elif _hovered_buff_index >= 0:
 				needs_redraw = true
 			if needs_redraw:
 				queue_redraw()

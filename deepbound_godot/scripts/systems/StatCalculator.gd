@@ -54,6 +54,20 @@ static func compute(equipment_system) -> Dictionary:
 
 	return totals
 
+## Compute equipment stats then layer status-effect stats on top.
+## Math order: Base Stats → Equipment Stats → Status Effect Stats.
+## Accepts an optional status_manager (StatusManager node); if null the result
+## is identical to compute().
+static func compute_with_status(equipment_system, status_manager) -> Dictionary:
+	var totals := compute(equipment_system)
+	if status_manager == null or not status_manager.has_method("get_stat_totals"):
+		return totals
+	var status_stats: Dictionary = status_manager.get_stat_totals()
+	for key in status_stats:
+		if totals.has(key):
+			totals[key] = totals[key] + status_stats[key]
+	return totals
+
 ## Returns the utility light radius in tiles from the equipped utility item,
 ## or 0.0 if the utility slot is empty or has no light_radius_tiles entry.
 static func get_utility_light_radius(equipment_system) -> float:

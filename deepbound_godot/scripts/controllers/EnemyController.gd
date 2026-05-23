@@ -1,10 +1,11 @@
 extends Node2D
 class_name EnemyController
 
-const EnemyCatalog = preload("res://scripts/catalogs/EnemyCatalog.gd")
-const TileCatalog = preload("res://scripts/catalogs/TileCatalog.gd")
+const EnemyCatalog    = preload("res://scripts/catalogs/EnemyCatalog.gd")
+const TileCatalog     = preload("res://scripts/catalogs/TileCatalog.gd")
 const CollisionSystem = preload("res://scripts/systems/CollisionSystem.gd")
-const TextureFactory = preload("res://scripts/factories/TextureFactory.gd")
+const TextureFactory  = preload("res://scripts/factories/TextureFactory.gd")
+const StatusManager   = preload("res://scripts/components/StatusManager.gd")
 
 const TILE_SIZE := 16
 const SPRITE_FRAME_SIZE := Vector2(32, 32)
@@ -27,7 +28,14 @@ var anim_time := 0.0
 var last_player_distance := 1000000.0
 var hurt_until := 0.0
 var applied_draw_frame := -1
-var applied_draw_row := -1
+var applied_draw_row   := -1
+
+## Optional StatusManager for applying slow/speed debuffs to this enemy.
+## Created lazily on first apply_status_effect() call.
+var status_manager = null
+
+## Cached speed multiplier offset from status effects (updated on status_changed).
+var _status_speed_bonus := 0.0
 
 func setup(id: String, player_node, world_node) -> void:
 	enemy_id = id
@@ -42,10 +50,11 @@ func _physics_process(delta: float) -> void:
 		return
 	anim_time += delta
 	last_player_distance = global_position.distance_to(player.global_position)
+	var effective_speed := float(data.speed) * maxf(0.0, 1.0 + _status_speed_bonus)
 	if last_player_distance < float(data.aggro_tiles) * TILE_SIZE:
-		velocity.x = move_toward(velocity.x, signf(player.global_position.x - global_position.x) * float(data.speed), float(data.speed) * 8.0 * delta)
+		velocity.x = move_toward(velocity.x, signf(player.global_position.x - global_position.x) * effective_speed, effective_speed * 8.0 * delta)
 	else:
-		velocity.x = move_toward(velocity.x, 0.0, float(data.speed) * 3.0 * delta)
+		velocity.x = move_toward(velocity.x, 0.0, effective_speed * 3.0 * delta)
 	velocity.y = minf(MAX_FALL, velocity.y + GRAVITY * delta)
 	var collision := CollisionSystem.move_actor(global_position, velocity, delta, _collider(), world)
 	global_position = collision.position
@@ -108,5 +117,22 @@ func _queue_redraw_if_animation_changed() -> void:
 
 func _invalidate_draw_frame() -> void:
 	applied_draw_frame = -1
-	applied_draw_row = -1
+	applied_draw_row   = -1
 	queue_redraw()
+
+## Apply a StatusEffectData resource to this enemy.  Creates the StatusManager
+## lazily on the first call.
+func apply_status_effect(effect) -> void:
+	if status_manager == null:
+		status_manager = StatusManager.new()
+		status_manager.name = "StatusManager"
+		add_child(status_manager)
+		status_manager.status_changed.connect(_on_enemy_status_changed)
+	status_manager.apply_effect(effect)
+
+func _on_enemy_status_changed() -> void:
+	if status_manager == null:
+		_status_speed_bonus = 0.0
+		return
+	var totals: Dictionary = status_manager.get_stat_totals()
+	_status_speed_bonus = float(totals.get("speed", 0.0))

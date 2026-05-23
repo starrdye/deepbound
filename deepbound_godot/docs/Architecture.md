@@ -1,113 +1,522 @@
-# Deepbound Godot Architecture
+# Deepbound — Systems Architecture
 
-## Runtime Structure
+> **Design philosophy in brief:** decouple UI from logic via signals, model
+> static data in catalogues, favour composition of small components over deep
+> inheritance, and keep every system testable in isolation.
 
-- `scenes/MainMenu.tscn` is the boot scene and launches fresh worlds, the single save slot, the prefab designer, or quit.
-- `scenes/Main.tscn` is the playable world scene.
-- `scripts/Main.gd` configures input, spawns Band encounters, updates HUD state, owns drop spawning, coordinates right-click chest use and selected-hotbar placement, and provides the Escape pause menu.
-- `scripts/World.gd` owns `ChunkStore`, tile drawing, mining calls, beacons, flares, and autotile-style edge rendering.
-- `scripts/systems/CollisionSystem.gd` owns bottom-center AABB tile collision for all moving entities.
-- `scripts/systems/SaveGameSystem.gd` owns schema-versioned single-slot JSON save/load and pending save handoff from the main menu.
-- `scripts/systems/PrefabTemplateRegistry.gd` loads built-in and user templates, validates JSON, caches deterministic structure instances, and answers chunk/nearby light/spawn/container queries.
-- `scripts/controllers/PrefabDesignerController.gd` powers the standalone `scenes/PrefabDesigner.tscn` utility for drawing and saving reusable prefab templates.
-- `scripts/controllers/PlayerController.gd` owns Delver intent, villager-style sprite animation, drilling, health, heat, inventory, and calls the shared collision solver.
-- `scripts/controllers/EnemyController.gd` is the shared enemy base for skitters, ants, and mummies and uses entity-specific collider dimensions.
-- `scripts/controllers/ChestController.gd` owns chest inventory, anchor tile metadata, the eight-frame open animation, and open/close state.
-- `scripts/controllers/DroppedItemController.gd` owns physical item drops, click pickup, optional special-drop magnet movement, pickup delay, and partial collection.
-- `scripts/controllers/HudController.gd` draws crisp Godot `Control` panels, heart icons, dual inventory/container grids, cursor stack drag/drop, and world-drop requests.
-- `scripts/factories/TextureFactory.gd` generates prototype pixel-art sheets and tile textures at runtime.
+---
 
-## Data Modules
+## Table of Contents
 
-- `BandCatalog.gd` defines five Bands and Solid Dark Blocks.
-- `TileCatalog.gd` defines tile hardness, drops, colors, light occlusion, and breakability.
-- `EnemyCatalog.gd` defines monster and boss roadmap stats.
-- `EconomyModel.gd` computes expected mining value and value per second.
-- `InventorySystem.gd` stores slot arrays, stack caps, matching-stack merges, overflow, swaps, quick slots, and capacity checks.
-- `HeartSystem.gd` maps HP to full, half, and empty heart states.
-- `SpawnSystem.gd` finds clear enemy spawn points so monsters do not appear embedded in blocks.
-- `data/templates/*.json` stores built-in sparse prefab templates. `goblin_village_full.json` is the imported Band 1 village, while `dwarf_fortress_full.json` and `dwarf_settlement_full.json` are Band 2 dwarf settlements.
+1. [Runtime Structure](#1-runtime-structure)
+2. [Architectural Patterns in Use](#2-architectural-patterns-in-use)
+3. [Inventory & Hotbar System](#3-inventory--hotbar-system)
+4. [Equipment & Stat Engine](#4-equipment--stat-engine)
+5. [Crafting System](#5-crafting-system)
+6. [NPC, Dialogue & Vendor System](#6-npc-dialogue--vendor-system)
+7. [Interactable Component](#7-interactable-component)
+8. [World & Lighting](#8-world--lighting)
+9. [Procedural Generation & Prefabs](#9-procedural-generation--prefabs)
+10. [Save / Load](#10-save--load)
+11. [Health & Hearts](#11-health--hearts)
+12. [Controls Reference](#12-controls-reference)
+13. [Future Architecture Roadmap](#13-future-architecture-roadmap)
 
-## Procedural Generation
+---
 
-Generation is deterministic from seed and tile coordinate. Horizontal generation is unbounded. Vertical generation resolves through five mapped Bands and clamps to Solid Dark Blocks at `tileY >= 1920`.
+## 1. Runtime Structure
 
-Structure generation is template-backed for active settlements. `StructureGenerator.gd` delegates chunk overlap and nearby marker lookups to `PrefabTemplateRegistry.gd`, which scans deterministic spawn regions, applies allowed mirror/rotation metadata, checks band bounds and starter avoidance, and returns structure dictionaries with `tiles`, `backgrounds`, `props`, `spawns`, `lights`, and `containers`.
+| Node / File | Responsibility |
+|---|---|
+| `scenes/MainMenu.tscn` | Boot scene. Launches fresh world, single save slot, prefab designer, or quit. |
+| `scenes/Main.tscn` | Playable world scene. |
+| `scripts/Main.gd` | Composition root. Wires signals, owns encounter spawning, coordinates all cross-system transitions (equipment → player stats, NPC interact → dialogue → vendor). |
+| `scripts/World.gd` | `ChunkStore`, tile drawing, mining, beacons, flares, light sources, utility-light radius for equipped items. |
+| `scripts/controllers/PlayerController.gd` | Delver physics (custom AABB), sprite animation, drilling, health, equipment stat hooks (`speed_bonus`, `defense_bonus`, `health_delta`). |
+| `scripts/controllers/HudController.gd` | All HUD rendering: hearts, hotbar, inventory/container panels, equipment panel, crafting panel, dialogue panel, vendor panel. Communicates outward via signals only. |
+| `scripts/controllers/EnemyController.gd` | Shared enemy base (skitters, ants, mummies). |
+| `scripts/controllers/ChestController.gd` | Chest inventory, anchor tile, open/close animation. |
+| `scripts/controllers/DroppedItemController.gd` | Physical item drops, click-pickup, gravity, partial collection. |
+| `scripts/controllers/NpcController.gd` | Friendly NPC: drawn body, name label. Owns an `InteractableComponent` child. |
+| `scripts/controllers/PrefabDesignerController.gd` | Standalone `PrefabDesigner.tscn` drawing tool. |
+| `scripts/factories/TextureFactory.gd` | Runtime pixel-art texture generation. Warmed at startup. |
+| `scripts/systems/CollisionSystem.gd` | Shared bottom-centre AABB tile collision for all movers. |
+| `scripts/systems/SaveGameSystem.gd` | Schema-versioned single-slot JSON save/load. |
+| `scripts/systems/PrefabTemplateRegistry.gd` | Template loading, deterministic structure instantiation, chunk/light/spawn/container queries. |
 
-Built-in templates currently include:
+---
 
-- `goblin_village_full`: Band 1 `standard_caverns`, imported from the legacy deterministic goblin village generator.
-- `dwarf_fortress_full`: Band 2 `colossal_ant_chambers`, a granite/iron fortress with forge rooms, ladders, bridge decks, storage, lanterns, and dwarf spawn markers.
-- `dwarf_settlement_full`: Band 2 `colossal_ant_chambers`, a multi-level settlement with a great hall, forge, backdrop houses, rails, lights, containers, and dwarf spawn markers.
+## 2. Architectural Patterns in Use
 
-The old live goblin village builder remains available for importer/reference tests. Runtime chunk generation uses template overlays so settlement output is stable regardless of chunk generation order.
+### 2.1 Signal-Driven UI (applied)
 
-## Save/Load
+`HudController` never holds direct references to `PlayerController` or
+`EquipmentSystem`. It receives data through method calls (e.g.
+`set_hud_state`, `set_equipment_system`) and pushes changes outward through
+signals (`world_drop_requested`, `drag_state_changed`, `dialogue_event`).
 
-`SaveGameSystem.gd` writes `user://saves/slot_1.json` as schema version `2`. The save stores the world seed, player state, inventory/hotbar state, tile and background overrides, damage, containers, drops, beacons, flares, generated foreground/background chunks, and frozen structure metadata for visited/generated chunks.
+`EquipmentSystem` emits `equipment_changed` whenever a slot mutates.
+`Main.gd` listens and dispatches the resulting stat delta to
+`PlayerController` and `World` — neither of those two objects knows about
+the HUD or each other.
 
-Loading restores generated chunks before applying player edits, so explored areas remain stable if templates are later changed. Unexplored chunks continue to use the current generator and latest enabled templates. Enemies are not serialized; band and structure encounter logic refreshes them after load.
+### 2.2 Composition over Inheritance (applied)
 
-## Prefab Designer
+The **`InteractableComponent`** (see §7) is a drop-in child node that adds
+proximity detection, a hint label, and an `interacted` signal to *any* host
+entity (NPC, chest, door, lever …) without the host extending a shared base
+class.
 
-`scenes/PrefabDesigner.tscn` is a standalone utility scene. It builds its palette from `TileCatalog`, `BackgroundCatalog`, `EnemyCatalog`, and `assets/props/*.png`, supports foreground/background/prop/spawn layers, and saves sparse JSON through `PrefabTemplateRegistry.save_template`.
+`StatCalculator` is a stateless utility class that takes an
+`EquipmentSystem` snapshot and returns a plain stat dictionary — no
+inheritance, no shared state.
 
-The editor canvas is fixed inside a clipped central frame. Large templates use a Pan tool, mouse drag/wheel shortcuts, Fit View, 100%, Zoom +/- buttons, and visible horizontal/vertical canvas scrollbars. Undo/redo covers normal mutating edits while view changes remain non-undoable.
+### 2.3 Catalogue / Data-Object Pattern (applied, migration path in §13)
 
-Template cells are sparse: blank cells mean "do not stamp", explicit `air` foreground entries carve terrain, and explicit `empty` background entries clear walls. Template props can expose light and container markers based on prop kind/id; multi-tile container props stamp their runtime `chest_block` marker on the bottom-left occupied cell.
+All static game data lives in catalogue files (`ItemCatalog`, `TileCatalog`,
+`EquipmentCatalog`, `NPCCatalog`, `VendorCatalog`, `DialogueCatalog`,
+`BandCatalog`, `PlaceableCatalog`, `BackgroundCatalog`, `EnemyCatalog`).
+These are `RefCounted` classes with `const` dictionaries. A future migration
+to Godot `Resource` assets (`.tres` files) is planned — see §13.
 
-## Inventory And Containers
+### 2.4 Encapsulated Data Systems (applied)
 
-The player owns a `24` slot inventory with `99` item stack caps. Pressing `I` calls `HudController.open_inventory` and shows only the player panel. Chests are tracked by anchor tile in `World.gd`, use `chest_block` for collision/mining, and own `18` slot inventories with no hidden hotbar. A chest opens only when the Delver is within `46px` and the right-click lands on the chest hit area; then `Main.gd` passes both inventories to `HudController.gd`, and the HUD renders player and chest panels simultaneously.
+`InventorySystem` and `EquipmentSystem` are `RefCounted` objects — pure
+data + logic with no Node tree coupling. The HUD and Main.gd hold
+references to them but the systems themselves know nothing about the scene
+tree.
 
-Drag/drop is handled by the HUD cursor stack:
+---
 
-- Pick up a stack by pressing on an occupied slot.
-- The press starts a visual drag preview; source data is not mutated yet.
-- `HudController.drag_state_changed` tells `Main.gd` to lock player controls while the cursor is carrying an item.
-- Release on an empty slot to move it.
-- Release on a matching stack to merge up to the stack cap.
-- Release on a different item to swap source and target.
-- Release outside all open inventory panels to emit `world_drop_requested`.
+## 3. Inventory & Hotbar System
 
-`Main.gd` receives world-drop requests and spawns a `DroppedItemController` at either the Delver's current bottom-center position or an explicit world position such as a broken chest tile. Normal player-dropped and chest-spilled stacks do not auto-pick up; they remain physical world items until clicked. Boss, quest, or scripted reward drops use `_spawn_auto_pickup_drop` to opt in to special magnet behavior.
+### Data Layer — `InventorySystem`
 
-## Hotbar
+`scripts/systems/InventorySystem.gd` — extends `RefCounted`
 
-The hotbar is six extra slots on `InventorySystem.gd`, separate from the player's `24` normal inventory slots. `InventorySystem.hotbar_slots(6)` returns those dedicated hotbar stacks instead of slicing the inventory grid, so the hotbar behaves as extra space.
+| Feature | Detail |
+|---|---|
+| Main inventory | 24 slots, 99-item stack cap |
+| Hotbar | 6 dedicated slots, separate array from main slots |
+| Key methods | `add_item`, `remove_item`, `place_stack`, `take_slot`, `count_item`, `available_space_for` |
+| Hotbar methods | `get_hotbar_slot`, `set_hotbar_slot`, `take_hotbar_slot`, `place_hotbar_stack`, `decrement_hotbar_slot` |
 
-`Main.gd` owns `selected_hotbar_index`, binds number keys `1-6`, cycles the selection with mouse wheel up/down, and passes `hotbar_slots`, `selected_hotbar_index`, and `active_item` into `HudController.gd`. `HudController.gd` draws the hotbar bottom-center even when the inventory page is closed, emits `hotbar_slot_selected` when a visible hotbar slot is clicked, and treats hotbar cells as drag/drop slots while the inventory page or a container is open.
+Items are stored as plain `{"item": String, "count": int, "stack_cap": int}`
+dictionaries. No signals are emitted by `InventorySystem` itself; `Main.gd`
+calls `HudController.queue_redraw()` after mutations.
 
-## Dropped Item Physics
+### UI Layer — `HudController`
 
-`DroppedItemController.gd` applies gravity, drag, pickup delay, and tile collision through `CollisionSystem.gd`. Dropped stacks use a small item collider and solver substeps so falling items stop on floors and walls instead of passing through solid blocks. World items can be manually dragged; while held, their physics pauses and player controls are locked. Click pickup and optional auto-pickup both respect inventory/hotbar capacity.
+Inventory rendering is purely immediate-mode `_draw()` on a `Control` node.
+Pressing `I` calls `hud.toggle_inventory(player.inventory)`.
 
-## Animation Performance
+**Drag/Drop flow:**
+1. `_gui_input` left-press → `_slot_at(point)` identifies hit slot → `_begin_drag(hit)` (visual only, source not mutated yet).
+2. Release on empty slot → `_take_hit_stack(drag_source)` + `_place_hit_stack(hit, stack)`.
+3. Release on matching stack → merge up to `stack_cap`, remainder stays on cursor.
+4. Release on different item → swap source and target.
+5. Release outside all panels → emit `world_drop_requested`; `Main.gd` spawns a `DroppedItemController`.
 
-`TextureFactory.warm_runtime_cache()` preloads the core player, tile, item, enemy, prop, UI, and break-overlay textures once during `Main.gd` startup. Missing texture lookups are cached as misses, so fallback rendering does not keep probing the filesystem during draw passes.
+Panels supported in a single inventory session: player inventory, container
+(chest), equipment column, crafting panel, vendor panel.
 
-`World.gd` uses cached foreground/background chunk render nodes instead of one monolithic terrain draw. Camera movement refreshes the visible chunk window and only creates or redraws chunks when chunk coordinates change; tile/background mutation and mining damage invalidate only the touched chunk plus neighbor chunks when edge rendering depends on them. Static structure props draw through cached prop overlays, while beacons, flares, mining overlays, and placement previews live on lightweight dynamic overlay nodes.
+### World Drops — `DroppedItemController`
 
-`PrefabTemplateRegistry.gd` caches template region instantiation results, chunk overlap results, and near-query results for spawns, lights, and containers. The movement performance tests exercise short jumps, long falls, placement previews, and template-heavy falls to keep camera movement from reintroducing full-world redraw or repeated template-instantiation spikes.
+`scripts/controllers/DroppedItemController.gd` — applies gravity, drag,
+tile collision via `CollisionSystem`, pickup delay, and optional auto-magnet
+for boss/quest drops.
 
-`HudController.gd` skips redraws when the derived HUD signature is unchanged, and static dropped items rely on transform updates rather than queuing a custom redraw every process tick.
+---
 
-## Health HUD
+## 4. Equipment & Stat Engine
 
-Health is modeled in HP and displayed as hearts. `HeartSystem.gd` uses `2` HP per heart, starts the Delver at `10` HP, and resolves equipment HP deltas to whole-heart-friendly max HP values.
+### Data — `EquipmentCatalog`
 
-## Prototype Controls
+`scripts/catalogs/EquipmentCatalog.gd`
 
-- Move: `A/D` or arrow keys
-- Jump: `W`, up arrow, or space
-- Drill: mouse left or `F`
-- Strike: `E`
-- Inventory: `I`
-- Hotbar: `1-6` or mouse wheel
-- Flare: `Q`
-- Beacon: `R`
-- Prototype band jumps: `F1`, `F2`, `F3`
+14 equippable items across 7 slot types:
 
-## Gameplay Reference
+| Slot | Items |
+|---|---|
+| `weapon` | wooden_sword, crystal_sword, cursed_sword |
+| `head` | iron_helm, crystal_helm |
+| `body` | leather_vest, iron_chestplate |
+| `legs` | leather_pants, iron_greaves |
+| `feet` | leather_boots |
+| `accessory` | copper_ring, resin_amulet |
+| `utility` | torch, lantern |
 
-See `Gameplay.md` for the player-facing description of mining, chests, inventory drag/drop, world drops, click pickup, special auto-pickup, hearts, and HUD behavior.
+Each entry: `{"slot": String, "stats": {"damage"?, "defense"?, "health_max"?, "speed"?, "drill_cool"?}}`.
+Utility items also carry `"light_radius_tiles": float`.
+
+Matching `ItemCatalog` entries exist for all 14 items.
+
+### Data Structure — `EquipmentSystem`
+
+`scripts/systems/EquipmentSystem.gd` — extends `RefCounted`
+
+Holds a `Dictionary` keyed by the 7 slot IDs. Slot validation is enforced
+via `EquipmentCatalog.get_slot_for_item()` before any write.
+
+```
+SLOT_IDS = ["weapon", "head", "body", "legs", "feet", "accessory", "utility"]
+```
+
+**Key methods:** `equip(item_id)`, `unequip(slot_id)`, `swap(slot_id, item_id)`,
+`get_item(slot_id)`, `find_item_slot(item_id)`.
+
+**Signal:** `equipment_changed` — fired on every slot mutation.
+
+### Stat Aggregation — `StatCalculator`
+
+`scripts/systems/StatCalculator.gd` — extends `RefCounted`, static methods only
+
+`StatCalculator.compute(equipment_system) → Dictionary` iterates all 7
+slots, sums `damage / defense / health_max / speed / drill_cool` from each
+equipped item's `stats` dict, returns a flat totals dict.
+
+`StatCalculator.get_utility_light_radius(equipment_system) → float` reads
+the utility slot's `light_radius_tiles` for World lighting.
+
+### Stat Application — `Main._on_equipment_changed()`
+
+`equipment_system.equipment_changed` → `Main._on_equipment_changed()`:
+
+```
+StatCalculator.compute(es)
+  → player.set_equipment_health_delta(health_max)
+  → player.set_equipment_speed_bonus(speed)
+  → player.set_equipment_defense_bonus(defense)
+  → world.set_player_utility_light(utility_radius)
+```
+
+No polling. Stats update exactly once per equip/unequip event.
+
+### Stat Hooks — `PlayerController`
+
+| Method | Effect |
+|---|---|
+| `set_equipment_health_delta(int)` | Recalculates `max_health` via `HeartSystem.resolve_max_hp` |
+| `set_equipment_speed_bonus(float)` | Multiplies `MAX_SPEED` in `_physics_process_normal` |
+| `set_equipment_defense_bonus(int)` | Subtracted from incoming damage before HP deduction |
+
+### Equipment Panel — `HudController`
+
+Rendered as a 7-slot column to the right of the player inventory panel.
+Each slot shows the equipped item icon, slot abbreviation hint when empty,
+and slot name label. Full drag-drop integration:
+
+- **Pick up** from equipment slot → `EquipmentSystem.unequip(slot_id)`, item
+  goes to cursor.
+- **Drop** onto equipment slot → `EquipmentSystem.swap(slot_id, item_id)`;
+  wrong-slot items are rejected and stay on cursor; displaced items go to
+  inventory.
+
+Weapon damage is read at strike time:
+```
+Main._strike_nearby_enemy()
+  → EquipmentCatalog.get_equippable(equipment_system.get_item("weapon"))
+  → base_damage from stats.damage
+```
+
+---
+
+## 5. Crafting System
+
+### Recipe Data — `CraftingSystem`
+
+`scripts/systems/CraftingSystem.gd` — holds recipe definitions and craftable
+status evaluation.
+
+Recipe entries: `{id, result, ingredients: [{item, count}], stations: [String]}`.
+
+`CraftingSystem.detect_active_stations(world, player_pos)` scans nearby
+tiles for workbench / furnace / anvil tags.
+
+`CraftingSystem.get_craftable_statuses(inventory, active_stations)` returns
+an array of `{id, recipe, craftable: bool}` for all known recipes.
+
+### Proximity Detection
+
+Station detection is tile-scan based (not Area2D). `Main._update_crafting()`
+calls `CraftingSystem.detect_active_stations()` on an interval
+(`STATION_CHECK_INTERVAL = 0.35 s`) to avoid per-frame work.
+
+Results feed `HudController.receive_craft_statuses()`, which rebuilds the
+visible recipe list.
+
+### Crafting Panel — `HudController`
+
+Displayed to the left of the inventory when inventory is open and no
+container/vendor is active. Shows up to 4 visible recipe rows (scrollable).
+A "Craftable / Show All" toggle button at the foot filters recipes.
+
+Hold-to-craft: press a craftable recipe slot → `craft_hold_started` signal;
+release → `craft_hold_ended`. `Main.gd` charges a delay (`CRAFT_HOLD_DELAY`)
+then fires `receive_crafted_item` on `HudController`.
+
+---
+
+## 6. NPC, Dialogue & Vendor System
+
+### Catalogues
+
+| File | Content |
+|---|---|
+| `NPCCatalog.gd` | 3 NPCs: `wandering_merchant`, `old_miner`, `cave_hermit`. Fields: name, sprite_key, dialogue (node_id array), shop, interact_radius. |
+| `DialogueCatalog.gd` | 11 dialogue nodes. Fields: text, speaker, event ("" or "open_shop"). |
+| `VendorCatalog.gd` | `wandering_merchant` shop — 7 stock entries with buy prices. `get_sell_price(item_id)` for player sell-back. |
+
+### Dialogue Flow
+
+```
+Player presses T
+  → Main._handle_interact()
+  → NPC's InteractableComponent.try_interact(player)   ← signal fires
+  → Main._on_npc_interacted(_, npc_id)
+  → HudController.open_dialogue(npc_id, node_ids)
+
+HudController typewriter (42 chars/sec in _process)
+T again:
+  - if typing  → skip animation
+  - if event node → emit dialogue_event(event_name, npc_id)
+  - otherwise  → advance to next node or close
+
+Main._on_dialogue_event("open_shop", npc_id)
+  → hud.close_dialogue()
+  → hud.open_vendor(shop_id, player.inventory)
+```
+
+### Dialogue Panel
+
+`HudController._draw_dialogue_panel()` — above the hotbar, full screen
+width minus padding. Draws portrait box, NPC name, typewriter text, and a
+blinking `[T] Next ▶ / [T] Close` hint when animation is complete.
+
+### Vendor Panel
+
+Right side of screen alongside the player inventory. Shows shop title,
+player copper count, up to 6 scrollable stock rows.
+
+- **Buy**: left-click a stock row → deduct copper, add item to inventory.
+- **Sell**: right-click an inventory slot while vendor is open → add copper,
+  remove item.
+
+Currency: `copper_nugget` item.
+
+---
+
+## 7. Interactable Component
+
+`scripts/components/InteractableComponent.gd` — extends `Node2D`
+
+A **composition component** that adds standardised proximity + interact
+behaviour to any host entity. Drop it as a child node — no base-class
+changes needed on the host.
+
+```
+InteractableComponent
+  signal interacted(interactor: Node)
+  signal proximity_changed(is_nearby: bool)
+  @export var interact_radius: float
+  @export var hint_text: String
+  @export var label_offset: Vector2
+  func update_proximity(player_world_pos)   → call each frame
+  func try_interact(interactor)             → call on T press; emits signal
+  func is_nearby(world_pos) → bool
+  func set_hint_visible(v: bool)
+```
+
+**Currently used by:** `NpcController` (creates the component in `setup()`,
+sets radius and hint text from `NPCCatalog`).
+
+**Extendable to:** chest doors (proximity-open), switches, levers, item
+pedestals, boss triggers — add the child node and connect `interacted`.
+
+> **Note:** The component currently uses a `distance_to()` check because the
+> player uses a custom AABB solver (not `CharacterBody2D`). If the player ever
+> gains a Godot physics body, this component can be upgraded to an `Area2D`
+> with `body_entered` / `body_exited` for zero-polling proximity detection.
+
+---
+
+## 8. World & Lighting
+
+`scripts/World.gd` owns the `ChunkStore`, tile draw, tile mutation, mining
+damage, beacons, flares, autotile edge rendering, and light source
+aggregation.
+
+### Light Sources
+
+`World.get_light_sources(player_position) → Array[Dictionary]`
+
+Returns a list of `{position: Vector2, radius_tiles: float, intensity: float}`
+entries:
+
+| Source | Radius | Intensity |
+|---|---|---|
+| Player ambient | 9.0 tiles | 0.95 |
+| Equipped utility item (torch/lantern) | see EquipmentCatalog | 0.88 |
+| Beacon | 12.0 tiles | 0.75 |
+| Flare | 8.0 tiles | 0.82 |
+| Structure lanterns | varies | varies |
+
+The utility light radius is set via `World.set_player_utility_light(radius_tiles)`
+from `Main._on_equipment_changed()`.
+
+---
+
+## 9. Procedural Generation & Prefabs
+
+Generation is deterministic from seed and tile coordinate. Horizontal
+generation is unbounded. Vertical generation resolves through five Bands;
+Solid Dark Blocks clamp at `tileY >= 1920`.
+
+`StructureGenerator.gd` delegates to `PrefabTemplateRegistry.gd` for chunk
+overlap, spawn/light/container markers, and mirror/rotation metadata.
+
+**Built-in templates:**
+
+| Template | Band | Description |
+|---|---|---|
+| `goblin_village_full` | Band 1 `standard_caverns` | Imported legacy goblin village |
+| `dwarf_fortress_full` | Band 2 `colossal_ant_chambers` | Granite/iron fortress with forge rooms |
+| `dwarf_settlement_full` | Band 2 `colossal_ant_chambers` | Multi-level settlement with great hall |
+
+### Prefab Designer
+
+`scenes/PrefabDesigner.tscn` — standalone tool scene. Builds palette from
+`TileCatalog`, `BackgroundCatalog`, `EnemyCatalog`, and `assets/props/*.png`.
+Supports foreground / background / prop / spawn layers. Saves sparse JSON via
+`PrefabTemplateRegistry.save_template`.
+
+Blank cells = "do not stamp"; explicit `air` foreground entries carve
+terrain; explicit `empty` background entries clear walls. Container props
+stamp a `chest_block` marker on the bottom-left occupied cell.
+
+---
+
+## 10. Save / Load
+
+`SaveGameSystem.gd` writes `user://saves/slot_1.json` at schema version `2`.
+
+**Persisted:** world seed, player state, inventory/hotbar, tile and
+background overrides, damage, containers, drops, beacons, flares, generated
+foreground/background chunks, frozen structure metadata.
+
+**Not persisted:** enemy positions (refreshed on load from encounter logic),
+NPC positions (re-spawned deterministically).
+
+Loading restores generated chunks before applying player edits so explored
+areas remain stable if templates change later.
+
+---
+
+## 11. Health & Hearts
+
+`HeartSystem.gd` models health as HP integers:
+
+| Constant | Value |
+|---|---|
+| `DEFAULT_MAX_HP` | 10 HP |
+| HP per heart | 2 HP |
+| States | `full`, `half`, `empty` |
+
+Equipment can add `health_max` delta (whole-heart-friendly values resolved by
+`HeartSystem.resolve_max_hp`).
+
+---
+
+## 12. Controls Reference
+
+| Action | Input |
+|---|---|
+| Move | `A / D` or arrow keys |
+| Jump | `W`, up arrow, or space |
+| Drill | Left mouse or `F` |
+| Strike | `E` |
+| Interact (NPC) | `T` |
+| Inventory | `I` |
+| Hotbar select | `1-6` or mouse wheel |
+| Flare | `Q` |
+| Beacon | `R` |
+| Band jump | `F1`, `F2`, `F3` |
+| Debug terminal | `` ` `` |
+
+---
+
+## 13. Future Architecture Roadmap
+
+The following improvements are planned but not yet implemented. They are
+documented here so new contributors understand the intended direction.
+
+### 13.1 Data via Godot Resources (high priority)
+
+**Current state:** all item/NPC/dialogue data is hardcoded in `const`
+dictionaries inside catalogue GDScript files.
+
+**Target state:** each item becomes a custom `Resource` file (`.tres`):
+
+```
+# ItemData.gd
+extends Resource
+class_name ItemData
+@export var item_id: String
+@export var display_name: String
+@export var description: String
+@export var rarity: StringName
+@export var category: StringName
+```
+
+**Why:** the editor can inspect and edit individual items, artists can
+create new items without touching GDScript, and `ResourceLoader` enables
+async loading for large item sets.
+
+**Migration path:** create `ItemData.gd`, write a one-time migration script
+that reads the existing `ItemCatalog.ITEMS` dict and emits `.tres` files into
+`res://data/items/`, then replace `ItemCatalog.get_item(id)` with
+`ResourceLoader.load("res://data/items/%s.tres" % id)` (cached in an
+`ItemRegistry` autoload).
+
+### 13.2 Area2D-based InteractableComponent
+
+Once `PlayerController` migrates to `CharacterBody2D`, the
+`InteractableComponent` (§7) can be upgraded:
+
+- Extend `Area2D` instead of `Node2D`.
+- Set a `CircleShape2D` of radius `interact_radius`.
+- Use `body_entered` / `body_exited` to set `_is_nearby` instead of a
+  distance check.
+- `_update_npc_proximity()` in `Main.gd` can be removed entirely.
+
+The public interface (`try_interact`, `interacted` signal) stays the same —
+no callers break.
+
+### 13.3 Global Signal Bus (EventBus autoload)
+
+For events that cross multiple distant systems (e.g. player death, day/night
+cycle, quest completion), a dedicated `EventBus.gd` autoload avoids chaining
+signal connections through Main.gd:
+
+```gdscript
+# autoload: EventBus.gd
+signal player_died
+signal equipment_changed(slot_id: String, item_id: String)
+signal quest_completed(quest_id: String)
+```
+
+### 13.4 Scene-Based Slot UI
+
+`HudController` currently draws all inventory slots in immediate-mode
+`_draw()`. A scene-based approach (`SlotUI.tscn` + `InventoryUI.tscn` using
+Godot's built-in `_get_drag_data` / `_can_drop_data` / `_drop_data`) would
+let the Godot editor preview the layout and support accessibility features.
+Recommended when the UI design is stable.
+
+### 13.5 Equipment Save/Load
+
+`EquipmentSystem` state is not yet serialized. Adding it to
+`SaveGameSystem` requires:
+1. `EquipmentSystem.serialize() → Dictionary`
+2. `EquipmentSystem.deserialize(data: Dictionary)`
+3. Include `"equipment"` key in the save schema and bump schema version to `3`.

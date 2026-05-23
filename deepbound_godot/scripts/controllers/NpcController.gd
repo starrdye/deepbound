@@ -2,6 +2,7 @@ extends Node2D
 class_name NpcController
 
 const NPCCatalog = preload("res://scripts/catalogs/NPCCatalog.gd")
+const InteractableComponent = preload("res://scripts/components/InteractableComponent.gd")
 
 ## NPC body dimensions (drawn in local space, origin at feet).
 const BODY_W  := 12.0
@@ -13,46 +14,36 @@ const LABEL_Y := -(BODY_H + HEAD_R * 2.0 + 6.0)
 var npc_id: String = ""
 var npc_def: Dictionary = {}
 
+## Reusable interact component — handles proximity detection, hint label, and
+## the `interacted` signal.  Host code (Main.gd) connects to this.
+var interactable: InteractableComponent = null
+
 var _name_label: Label = null
-var _hint_label: Label = null
 
 func setup(id: String) -> void:
 	npc_id = id
 	npc_def = NPCCatalog.get_npc(id)
-	_build_labels()
+	_build_interactable()
+	_build_name_label()
 	queue_redraw()
 
-func _build_labels() -> void:
-	var display_name := String(npc_def.get("name", npc_id))
+func _build_interactable() -> void:
+	interactable = InteractableComponent.new()
+	interactable.interact_radius = float(npc_def.get("interact_radius", 52.0))
+	interactable.hint_text = "[T] Talk"
+	# Position hint above the NPC's name label
+	interactable.label_offset = Vector2(-30.0, LABEL_Y - 15.0)
+	add_child(interactable)
 
+func _build_name_label() -> void:
 	_name_label = Label.new()
-	_name_label.text = display_name
+	_name_label.text = String(npc_def.get("name", npc_id))
 	_name_label.add_theme_color_override("font_color", Color8(244, 231, 192))
 	_name_label.add_theme_font_size_override("font_size", 11)
 	_name_label.position = Vector2(-50.0, LABEL_Y - 2.0)
 	_name_label.custom_minimum_size = Vector2(100.0, 0.0)
 	_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_name_label)
-
-	_hint_label = Label.new()
-	_hint_label.text = "[T] Talk"
-	_hint_label.add_theme_color_override("font_color", Color8(140, 255, 140))
-	_hint_label.add_theme_font_size_override("font_size", 10)
-	_hint_label.position = Vector2(-30.0, LABEL_Y - 15.0)
-	_hint_label.custom_minimum_size = Vector2(60.0, 0.0)
-	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint_label.visible = false
-	add_child(_hint_label)
-
-## Show or hide the "[T] Talk" prompt based on player proximity.
-func set_nearby(is_nearby: bool) -> void:
-	if _hint_label != null:
-		_hint_label.visible = is_nearby
-
-## True when player_world_pos is within this NPC's interact radius.
-func is_player_in_range(player_world_pos: Vector2) -> bool:
-	var radius := float(npc_def.get("interact_radius", 52.0))
-	return global_position.distance_to(player_world_pos) <= radius
 
 func _draw() -> void:
 	if npc_id == "":

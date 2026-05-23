@@ -1056,14 +1056,18 @@ func _spawn_npc(npc_id: String, world_pos: Vector2) -> void:
 	npcs_node.add_child(npc)
 	npc.global_position = world_pos
 	npc.setup(npc_id)
+	# Connect the InteractableComponent signal so dialogue starts automatically
+	# when try_interact() fires.
+	if npc.interactable != null:
+		npc.interactable.interacted.connect(_on_npc_interacted.bind(npc_id))
 
-## Show/hide the [T] Talk prompt on each NPC each frame.
+## Update each NPC's InteractableComponent proximity state once per frame.
 func _update_npc_proximity() -> void:
 	if npcs_node == null or not is_instance_valid(player):
 		return
 	for child in npcs_node.get_children():
-		if child is NpcController:
-			child.set_nearby(child.is_player_in_range(player.global_position))
+		if child is NpcController and child.interactable != null:
+			child.interactable.update_proximity(player.global_position)
 
 ## Called when T is pressed.
 func _handle_interact() -> void:
@@ -1072,28 +1076,35 @@ func _handle_interact() -> void:
 	if hud.is_dialogue_open():
 		hud.advance_dialogue()
 		return
-	_try_start_nearby_npc_dialogue()
+	_try_interact_nearby_npc()
 
-func _try_start_nearby_npc_dialogue() -> void:
+## Ask the nearest in-range NPC's InteractableComponent to fire its signal.
+func _try_interact_nearby_npc() -> void:
 	if npcs_node == null or not is_instance_valid(player):
 		return
 	var nearest: NpcController = null
 	var nearest_dist := INF
 	for child in npcs_node.get_children():
-		if child is NpcController and child.is_player_in_range(player.global_position):
+		if child is NpcController and child.interactable != null \
+				and child.interactable.is_nearby(player.global_position):
 			var d: float = child.global_position.distance_to(player.global_position)
 			if d < nearest_dist:
 				nearest_dist = d
 				nearest = child
-	if nearest == null:
+	if nearest != null:
+		nearest.interactable.try_interact(player)
+
+## Fired by InteractableComponent when the player confirms an NPC interaction.
+func _on_npc_interacted(_interactor: Node, npc_id: String) -> void:
+	if hud == null:
 		return
-	var npc_def := NPCCatalog.get_npc(nearest.npc_id)
+	var npc_def := NPCCatalog.get_npc(npc_id)
 	var node_ids: Array[String] = []
 	for id in npc_def.get("dialogue", []):
 		node_ids.append(String(id))
 	if node_ids.is_empty():
 		return
-	hud.open_dialogue(nearest.npc_id, node_ids)
+	hud.open_dialogue(npc_id, node_ids)
 
 ## Fired by HudController when a dialogue node has an event.
 func _on_dialogue_event(event_name: String, npc_id: String) -> void:

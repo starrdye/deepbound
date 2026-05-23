@@ -189,6 +189,31 @@ func hotbar_slot_index(hotbar_index: int, cols := 6) -> int:
 func hotbar_slots(cols := 6) -> Array[Dictionary]:
 	return hotbar.slice(0, mini(hotbar.size(), cols))
 
+## Remove up to `count` of `item_id` (hotbar first, then main slots).
+## Returns the number actually removed.
+func remove_item(item_id: String, count: int) -> int:
+	if item_id == "" or count <= 0:
+		return 0
+	var need := count
+	need -= _remove_from_array(hotbar, item_id, need)
+	need -= _remove_from_array(slots,  item_id, need)
+	return count - need
+
+func _remove_from_array(target: Array[Dictionary], item_id: String, count: int) -> int:
+	var removed := 0
+	for slot in target:
+		if removed >= count:
+			break
+		if String(slot.item) != item_id:
+			continue
+		var take := mini(int(slot.count), count - removed)
+		slot.count = int(slot.count) - take
+		removed += take
+		if int(slot.count) <= 0:
+			slot.item  = ""
+			slot.count = 0
+	return removed
+
 func _all_storage_slots() -> Array[Dictionary]:
 	var combined: Array[Dictionary] = []
 	combined.append_array(slots)

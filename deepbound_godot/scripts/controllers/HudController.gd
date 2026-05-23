@@ -1,11 +1,14 @@
 extends Control
 class_name HudController
 
-const TextureFactory = preload("res://scripts/factories/TextureFactory.gd")
-const HeartSystem = preload("res://scripts/systems/HeartSystem.gd")
-const DebugSystem = preload("res://scripts/systems/DebugSystem.gd")
-const TerminalSystem = preload("res://scripts/systems/TerminalSystem.gd")
-const ItemCatalog = preload("res://scripts/catalogs/ItemCatalog.gd")
+const TextureFactory  = preload("res://scripts/factories/TextureFactory.gd")
+const HeartSystem     = preload("res://scripts/systems/HeartSystem.gd")
+const DebugSystem     = preload("res://scripts/systems/DebugSystem.gd")
+const TerminalSystem  = preload("res://scripts/systems/TerminalSystem.gd")
+const ItemCatalog     = preload("res://scripts/catalogs/ItemCatalog.gd")
+const DialogueCatalog = preload("res://scripts/catalogs/DialogueCatalog.gd")
+const NPCCatalog      = preload("res://scripts/catalogs/NPCCatalog.gd")
+const VendorCatalog   = preload("res://scripts/catalogs/VendorCatalog.gd")
 
 signal world_drop_requested(stack: Dictionary)
 signal hotbar_slot_selected(index: int)
@@ -13,6 +16,9 @@ signal drag_state_changed(active: bool)
 signal terminal_command(cmd: String)
 signal craft_hold_started(recipe_id: String)
 signal craft_hold_ended()
+## Fired when a dialogue node carries an event (e.g. "open_shop").
+## Main.gd listens and performs the transition.
+signal dialogue_event(event_name: String, npc_id: String)
 
 const SLOT_SIZE := 36.0
 const SLOT_GAP := 4.0
@@ -78,6 +84,37 @@ var _craft_tooltip_ph: float = 0.0
 var _craft_tooltip_border: Color = Color.TRANSPARENT
 var _craft_tooltip_cached_id: String = ""
 
+## ── Dialogue constants ────────────────────────────────────────────────────
+const DIALOGUE_CHARS_PER_SEC := 42.0
+const DIALOGUE_PANEL_H       := 132.0
+const DIALOGUE_PORTRAIT_SZ   := 76.0
+const DIALOGUE_PAD           := 14.0
+const DIALOGUE_NAME_SZ       := 13
+const DIALOGUE_TEXT_SZ       := 12
+const DIALOGUE_HINT_SZ       := 10
+
+## ── Vendor constants ──────────────────────────────────────────────────────
+const VENDOR_VISIBLE_SLOTS := 6
+const VENDOR_PANEL_W       := 200.0
+
+## ── Dialogue state ────────────────────────────────────────────────────────
+var _dialogue_open: bool = false
+var _dialogue_npc_id: String = ""
+var _dialogue_node_ids: Array[String] = []
+var _dialogue_node_index: int = 0
+var _dialogue_text_full: String = ""
+var _dialogue_text_progress: float = 0.0
+var _dialogue_speaker: String = ""
+var _dialogue_typing: bool = false
+var _dialogue_blink: bool = true         # advance-arrow blink state
+var _dialogue_blink_elapsed: float = 0.0
+
+## ── Vendor state ──────────────────────────────────────────────────────────
+var _vendor_open: bool = false
+var _vendor_shop_id: String = ""
+var _vendor_scroll: int = 0
+var _hovered_vendor_idx: int = -1
+
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_PASS
@@ -117,7 +154,7 @@ func close_container() -> void:
 	close_inventory()
 
 func close_inventory() -> void:
-	if not inventory_open:
+	if not inventory_open and not _vendor_open:
 		return
 	if _craft_held_recipe_id != "":
 		_craft_held_recipe_id = ""
@@ -126,8 +163,11 @@ func close_inventory() -> void:
 	inventory_open = false
 	container_open = false
 	container_inventory = null
+	_vendor_open = false
+	_vendor_shop_id = ""
 	_hovered_item_id = ""
 	_hovered_craft_id = ""
+	_hovered_vendor_idx = -1
 	queue_redraw()
 
 func _flush_cursor_stack() -> void:
@@ -200,14 +240,17 @@ func _draw() -> void:
 	_draw_hotbar()
 	if inventory_open:
 		_draw_inventory_panel(_player_panel_rect(), "Inventory", player_inventory, PLAYER_COLS, "player")
-		if not container_open:
+		if not container_open and not _vendor_open:
 			_draw_crafting_panel()
 	if container_open:
 		_draw_inventory_panel(_container_panel_rect(), container_title, container_inventory, CONTAINER_COLS, "container")
+	if _vendor_open:
+		_draw_vendor_panel()
 	if inventory_open:
 		_draw_cursor_stack()
 	_draw_tooltip()
 	_draw_craft_tooltip()
+	_draw_dialogue_panel()
 
 func _draw_hearts(origin: Vector2) -> void:
 	var states: Array = hud_state.get(
@@ -295,14 +338,17 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if inventory_open:
 			if event.pressed:
-				if not container_open and _handle_craft_press(event.position):
+				if _vendor_open and _handle_vendor_buy_press(event.position):
+					queue_redraw()
+					return
+				if not container_open and not _vendor_open and _handle_craft_press(event.position):
 					queue_redraw()
 					return
 				if _handle_mouse_press(event.position):
 					queue_redraw()
 					return
 			else:
-				if not container_open and _handle_craft_release(event.position):
+				if not container_open and not _vendor_open and _handle_craft_release(event.position):
 					queue_redraw()
 					return
 				if _handle_mouse_release(event.position):
@@ -319,12 +365,22 @@ func _gui_input(event: InputEvent) -> void:
 				hotbar_slot_selected.emit(hotbar_index)
 				accept_event()
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
-		if inventory_open and not container_open and _crafting_panel_rect().has_point(event.position):
+		if _vendor_open and inventory_open and _handle_vendor_sell_press(event.position):
+			queue_redraw()
+			accept_event()
+			return
+		if inventory_open and not container_open and not _vendor_open and _crafting_panel_rect().has_point(event.position):
 			accept_event()
 			return
 	elif event is InputEventMouseButton and event.pressed and (event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN):
-		if inventory_open and not container_open and _crafting_panel_rect().has_point(event.position):
-			_craft_scroll_by(1 if event.button_index == MOUSE_BUTTON_WHEEL_DOWN else -1)
+		var delta_dir := 1 if event.button_index == MOUSE_BUTTON_WHEEL_DOWN else -1
+		if _vendor_open and _vendor_panel_rect().has_point(event.position):
+			_vendor_scroll_by(delta_dir)
+			queue_redraw()
+			accept_event()
+			return
+		if inventory_open and not container_open and not _vendor_open and _crafting_panel_rect().has_point(event.position):
+			_craft_scroll_by(delta_dir)
 			queue_redraw()
 			accept_event()
 			return
@@ -334,7 +390,9 @@ func _gui_input(event: InputEvent) -> void:
 		else:
 			var new_hover := _item_id_at(event.position)
 			var new_craft_id := _craft_id_at(event.position)
-			if new_craft_id != "":
+			var new_vendor_idx := _vendor_idx_at(event.position)
+			# Craft / vendor hover suppress item tooltip
+			if new_craft_id != "" or new_vendor_idx >= 0:
 				new_hover = ""
 			var needs_redraw := false
 			if new_hover != _hovered_item_id:
@@ -354,6 +412,11 @@ func _gui_input(event: InputEvent) -> void:
 						_rebuild_craft_tooltip(new_craft_id, font)
 				needs_redraw = true
 			elif _hovered_craft_id != "":
+				needs_redraw = true
+			if new_vendor_idx != _hovered_vendor_idx:
+				_hovered_vendor_idx = new_vendor_idx
+				needs_redraw = true
+			elif _hovered_vendor_idx >= 0:
 				needs_redraw = true
 			if needs_redraw:
 				queue_redraw()
@@ -399,9 +462,9 @@ func _handle_mouse_release(point: Vector2) -> bool:
 
 func _player_panel_rect() -> Rect2:
 	var rows := ceili(float(player_inventory.slots.size() if player_inventory != null else 24) / float(PLAYER_COLS))
-	# Shift right to make room for the crafting panel when it is visible (inventory
-	# open, no container).  8px left margin + panel width + 8px gap = 164px.
-	var origin_x := (8.0 + CRAFT_PANEL_W + 8.0) if (inventory_open and not container_open) else 64.0
+	# Shift right to make room for the crafting panel when it is visible
+	# (inventory open, no container, no vendor).  8px + 148px + 8px = 164px.
+	var origin_x := (8.0 + CRAFT_PANEL_W + 8.0) if (inventory_open and not container_open and not _vendor_open) else 64.0
 	return _panel_rect(Vector2(origin_x, 132), PLAYER_COLS, rows)
 
 func _container_panel_rect() -> Rect2:
@@ -892,3 +955,316 @@ func _draw_craft_tooltip() -> void:
 		draw_string(font, Vector2(px + TOOLTIP_PAD, cy + sz), String(ld.text),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, sz, ld.color)
 		cy += float(sz) + TOOLTIP_LINE_GAP
+
+## ── Dialogue ─────────────────────────────────────────────────────────────────
+
+func is_dialogue_open() -> bool:
+	return _dialogue_open
+
+## Open the dialogue sequence for `npc_id` using the ordered `node_ids`.
+func open_dialogue(npc_id: String, node_ids: Array[String]) -> void:
+	_dialogue_npc_id   = npc_id
+	_dialogue_node_ids = node_ids
+	_dialogue_node_index = 0
+	_dialogue_open = true
+	_hovered_item_id   = ""
+	_hovered_craft_id  = ""
+	_load_current_dialogue_node()
+	queue_redraw()
+
+func close_dialogue() -> void:
+	if not _dialogue_open:
+		return
+	_dialogue_open   = false
+	_dialogue_typing = false
+	queue_redraw()
+
+## Called each time the player presses the interact key during dialogue.
+func advance_dialogue() -> void:
+	if not _dialogue_open:
+		return
+	if _dialogue_typing:
+		# Skip animation — reveal all text immediately.
+		_dialogue_text_progress = float(_dialogue_text_full.length())
+		_dialogue_typing        = false
+		queue_redraw()
+		return
+	# Fire event if this node carries one.
+	var event := _current_dialogue_event()
+	if event != "":
+		dialogue_event.emit(event, _dialogue_npc_id)
+		return
+	# Advance to next node or close if this was the last.
+	_dialogue_node_index += 1
+	if _dialogue_node_index >= _dialogue_node_ids.size():
+		close_dialogue()
+		return
+	_load_current_dialogue_node()
+	queue_redraw()
+
+func _load_current_dialogue_node() -> void:
+	var node_id  := _dialogue_node_ids[_dialogue_node_index]
+	var node_def := DialogueCatalog.get_node(node_id)
+	_dialogue_text_full     = String(node_def.get("text", "..."))
+	_dialogue_speaker       = String(node_def.get("speaker", _dialogue_npc_id))
+	_dialogue_text_progress = 0.0
+	_dialogue_typing        = true
+	_dialogue_blink         = true
+	_dialogue_blink_elapsed = 0.0
+
+func _current_dialogue_event() -> String:
+	if _dialogue_node_index >= _dialogue_node_ids.size():
+		return ""
+	var node_id := _dialogue_node_ids[_dialogue_node_index]
+	return String(DialogueCatalog.get_node(node_id).get("event", ""))
+
+## Typewriter advance + blink update — runs only while dialogue is open.
+func _process(delta: float) -> void:
+	if not _dialogue_open:
+		return
+	if _dialogue_typing:
+		_dialogue_text_progress += DIALOGUE_CHARS_PER_SEC * delta
+		if _dialogue_text_progress >= float(_dialogue_text_full.length()):
+			_dialogue_text_progress = float(_dialogue_text_full.length())
+			_dialogue_typing        = false
+		queue_redraw()
+	else:
+		_dialogue_blink_elapsed += delta
+		if _dialogue_blink_elapsed >= 0.45:
+			_dialogue_blink_elapsed = 0.0
+			_dialogue_blink = not _dialogue_blink
+			queue_redraw()
+
+func _dialogue_panel_rect() -> Rect2:
+	var vsize := get_viewport_rect().size
+	var hotbar_top := vsize.y - SLOT_SIZE - HOTBAR_MARGIN_BOTTOM
+	return Rect2(
+		Vector2(DIALOGUE_PAD, hotbar_top - DIALOGUE_PANEL_H - 8.0),
+		Vector2(vsize.x - DIALOGUE_PAD * 2.0, DIALOGUE_PANEL_H)
+	)
+
+func _draw_dialogue_panel() -> void:
+	if not _dialogue_open:
+		return
+	var panel := _dialogue_panel_rect()
+	# Drop shadow
+	draw_rect(Rect2(panel.position + Vector2(3.0, 3.0), panel.size), Color(0, 0, 0, 0.45), true)
+	# Background + border
+	draw_rect(panel, Color(0.04, 0.04, 0.10, 0.97), true)
+	draw_rect(panel, Color8(91, 100, 107), false, 2.0)
+
+	var font := get_theme_default_font()
+	if font == null:
+		return
+
+	# Portrait box
+	var portrait_rect := Rect2(
+		panel.position + Vector2(DIALOGUE_PAD, DIALOGUE_PAD),
+		Vector2(DIALOGUE_PORTRAIT_SZ, DIALOGUE_PORTRAIT_SZ)
+	)
+	draw_rect(portrait_rect, Color(0.07, 0.06, 0.12, 1.0), true)
+	draw_rect(portrait_rect, Color8(91, 100, 107), false, 1.5)
+	var npc_col := _npc_portrait_color(_dialogue_npc_id)
+	draw_rect(portrait_rect.grow(-5), npc_col, true)
+	var initial := _dialogue_speaker.substr(0, 1)
+	draw_string(font,
+		portrait_rect.get_center() + Vector2(-5.0, 8.0),
+		initial, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1, 1, 1, 0.88))
+
+	# Text column geometry
+	var col_x := portrait_rect.position.x + DIALOGUE_PORTRAIT_SZ + DIALOGUE_PAD
+	var col_w := panel.position.x + panel.size.x - DIALOGUE_PAD - col_x
+
+	# Nameplate
+	var name_y := panel.position.y + DIALOGUE_PAD + float(DIALOGUE_NAME_SZ)
+	draw_string(font, Vector2(col_x, name_y),
+		_dialogue_speaker, HORIZONTAL_ALIGNMENT_LEFT, -1, DIALOGUE_NAME_SZ, Color8(255, 220, 140))
+	var sep_y := name_y + 5.0
+	draw_line(Vector2(col_x, sep_y), Vector2(col_x + col_w, sep_y), Color8(91, 100, 107), 1.0)
+
+	# Visible text (typewriter slice)
+	var visible_text := _dialogue_text_full.substr(0, int(_dialogue_text_progress))
+	var text_y := sep_y + 8.0 + float(DIALOGUE_TEXT_SZ)
+	draw_multiline_string(font, Vector2(col_x, text_y), visible_text,
+		HORIZONTAL_ALIGNMENT_LEFT, col_w, DIALOGUE_TEXT_SZ, -1, Color8(220, 215, 205))
+
+	# Advance / blink arrow (bottom-right when done typing)
+	if not _dialogue_typing and _dialogue_blink:
+		var is_last  := _dialogue_node_index >= _dialogue_node_ids.size() - 1
+		var has_event := _current_dialogue_event() != ""
+		var hint: String
+		if is_last and not has_event:
+			hint = "[ T ] Close"
+		elif has_event:
+			hint = "[ T ] Continue  ▶"
+		else:
+			hint = "[ T ] Next  ▶"
+		var hint_x := panel.position.x + panel.size.x - DIALOGUE_PAD
+		var hint_y := panel.position.y + panel.size.y - DIALOGUE_PAD
+		draw_string(font, Vector2(hint_x, hint_y), hint,
+			HORIZONTAL_ALIGNMENT_RIGHT, -1, DIALOGUE_HINT_SZ, Color8(140, 255, 140))
+
+func _npc_portrait_color(npc_id: String) -> Color:
+	match npc_id:
+		"wandering_merchant": return Color8(60, 120, 200)
+		"old_miner":          return Color8(160, 120, 70)
+		"cave_hermit":        return Color8(110, 70, 165)
+	return Color8(80, 160, 80)
+
+## ── Vendor ───────────────────────────────────────────────────────────────────
+
+func is_vendor_open() -> bool:
+	return _vendor_open
+
+## Open the vendor panel alongside the player inventory.
+func open_vendor(shop_id: String, player_inv) -> void:
+	player_inventory    = player_inv
+	_vendor_shop_id     = shop_id
+	_vendor_scroll      = 0
+	_hovered_vendor_idx = -1
+	_vendor_open        = true
+	inventory_open      = true
+	container_open      = false
+	_hovered_item_id    = ""
+	_hovered_craft_id   = ""
+	queue_redraw()
+
+func close_vendor() -> void:
+	if not _vendor_open:
+		return
+	_vendor_open    = false
+	_vendor_shop_id = ""
+	inventory_open  = false
+	_hovered_vendor_idx = -1
+	queue_redraw()
+
+func _vendor_panel_rect() -> Rect2:
+	if not _vendor_open:
+		return Rect2()
+	var shop_def    := VendorCatalog.get_shop(_vendor_shop_id)
+	var stock_size  := (shop_def.get("stock", []) as Array).size()
+	var vis_slots   := mini(stock_size, VENDOR_VISIBLE_SLOTS)
+	var panel_h     := PANEL_PADDING * 2.0 + PANEL_HEADER + 18.0 \
+		+ float(vis_slots) * (SLOT_SIZE + SLOT_GAP) + 20.0
+	var vsize       := get_viewport_rect().size
+	return Rect2(
+		Vector2(vsize.x - VENDOR_PANEL_W - 64.0, 132.0),
+		Vector2(VENDOR_PANEL_W, panel_h)
+	)
+
+func _vendor_slot_rect(vis_idx: int) -> Rect2:
+	var panel := _vendor_panel_rect()
+	var y := panel.position.y + PANEL_PADDING + PANEL_HEADER + 18.0 \
+		+ float(vis_idx) * (SLOT_SIZE + SLOT_GAP)
+	return Rect2(
+		Vector2(panel.position.x + PANEL_PADDING, y),
+		Vector2(VENDOR_PANEL_W - PANEL_PADDING * 2.0, SLOT_SIZE)
+	)
+
+## Returns the stock index under `point`, or -1 if none.
+func _vendor_idx_at(point: Vector2) -> int:
+	if not _vendor_open:
+		return -1
+	var shop_def := VendorCatalog.get_shop(_vendor_shop_id)
+	var stock: Array = shop_def.get("stock", [])
+	for i in range(mini(VENDOR_VISIBLE_SLOTS, stock.size() - _vendor_scroll)):
+		if _vendor_slot_rect(i).has_point(point):
+			return _vendor_scroll + i
+	return -1
+
+func _vendor_scroll_by(delta: int) -> void:
+	var shop_def   := VendorCatalog.get_shop(_vendor_shop_id)
+	var stock_size := (shop_def.get("stock", []) as Array).size()
+	_vendor_scroll = clampi(_vendor_scroll + delta, 0, maxi(0, stock_size - VENDOR_VISIBLE_SLOTS))
+
+func _draw_vendor_panel() -> void:
+	if not _vendor_open:
+		return
+	var panel    := _vendor_panel_rect()
+	var shop_def := VendorCatalog.get_shop(_vendor_shop_id)
+	_panel(panel)
+	var font := get_theme_default_font()
+	if font == null:
+		return
+
+	# Header
+	var shop_title := String(shop_def.get("title", "Shop"))
+	draw_string(font, panel.position + Vector2(PANEL_PADDING, 19.0),
+		shop_title, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 15, Color8(244, 231, 192))
+
+	# Copper count
+	var copper: int = player_inventory.count_item("copper_nugget") if player_inventory != null else 0
+	draw_string(font, panel.position + Vector2(PANEL_PADDING, 35.0),
+		"%d copper" % copper, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 10, Color8(210, 168, 80))
+
+	# Stock rows
+	var stock: Array = shop_def.get("stock", [])
+	for i in range(mini(VENDOR_VISIBLE_SLOTS, stock.size() - _vendor_scroll)):
+		var entry: Dictionary = stock[_vendor_scroll + i]
+		var item_id := String(entry.get("item", ""))
+		var price   := int(entry.get("price", 0))
+		var slot_rect := _vendor_slot_rect(i)
+		var can_afford := copper >= price
+		var is_hovered := _hovered_vendor_idx == (_vendor_scroll + i)
+		var bg     := Color(0.14, 0.12, 0.18, 0.95) if is_hovered else Color(0.08, 0.075, 0.085, 0.92)
+		var border := Color8(160, 160, 200) if is_hovered else Color8(91, 100, 107)
+		draw_rect(slot_rect, bg, true)
+		draw_rect(slot_rect, border, false, 1.0)
+		var tint := Color.WHITE if can_afford else Color(1.0, 1.0, 1.0, 0.35)
+		_draw_stack({"item": item_id, "count": 1, "stack_cap": 99},
+			Rect2(slot_rect.position, Vector2(SLOT_SIZE, SLOT_SIZE)), tint)
+		var def       := ItemCatalog.get_item(item_id)
+		var item_name := String(def.get("name", item_id.replace("_", " ").capitalize()))
+		var name_col  := Color(ItemCatalog.rarity_color(String(def.get("rarity", "common"))), 1.0 if can_afford else 0.35)
+		draw_string(font,
+			Vector2(slot_rect.position.x + SLOT_SIZE + 4.0, slot_rect.position.y + 15.0),
+			item_name, HORIZONTAL_ALIGNMENT_LEFT,
+			slot_rect.size.x - SLOT_SIZE - 4.0, 10, name_col)
+		var price_col := Color8(210, 168, 80) if can_afford else Color8(200, 80, 80)
+		draw_string(font,
+			Vector2(slot_rect.position.x + SLOT_SIZE + 4.0, slot_rect.position.y + 27.0),
+			"%d copper" % price, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, price_col)
+
+	# Footer hint
+	var footer_y := panel.position.y + panel.size.y - PANEL_PADDING
+	draw_string(font, Vector2(panel.position.x + PANEL_PADDING, footer_y),
+		"Right-click inventory to sell", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color8(120, 120, 130))
+
+func _handle_vendor_buy_press(point: Vector2) -> bool:
+	if not _vendor_open or player_inventory == null:
+		return false
+	var idx := _vendor_idx_at(point)
+	if idx < 0:
+		return _vendor_panel_rect().has_point(point)  # consume click inside panel even if no slot
+	var shop_def := VendorCatalog.get_shop(_vendor_shop_id)
+	var stock: Array = shop_def.get("stock", [])
+	if idx >= stock.size():
+		return true
+	var entry   : Dictionary = stock[idx]
+	var item_id := String(entry.get("item", ""))
+	var price   := int(entry.get("price", 0))
+	if player_inventory.count_item("copper_nugget") < price:
+		return true  # can't afford — consume click
+	if player_inventory.available_space_for(item_id) <= 0:
+		return true  # no room
+	player_inventory.remove_item("copper_nugget", price)
+	player_inventory.add_item(item_id, 1)
+	accept_event()
+	return true
+
+func _handle_vendor_sell_press(point: Vector2) -> bool:
+	if not _vendor_open or player_inventory == null:
+		return false
+	var hit := _slot_at(point)
+	if hit.is_empty():
+		return false
+	var stack := _get_hit_stack(hit)
+	if _is_empty_stack(stack):
+		return false
+	var item_id    := String(stack.item)
+	var sell_price := VendorCatalog.get_sell_price(item_id)
+	if sell_price <= 0:
+		return false
+	player_inventory.remove_item(item_id, 1)
+	player_inventory.add_item("copper_nugget", sell_price)
+	return true

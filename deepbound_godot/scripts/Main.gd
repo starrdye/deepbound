@@ -1,20 +1,22 @@
 extends Node2D
 
-const BandCatalog = preload("res://scripts/catalogs/BandCatalog.gd")
-const TileCatalog = preload("res://scripts/catalogs/TileCatalog.gd")
+const BandCatalog       = preload("res://scripts/catalogs/BandCatalog.gd")
+const TileCatalog       = preload("res://scripts/catalogs/TileCatalog.gd")
 const BackgroundCatalog = preload("res://scripts/catalogs/BackgroundCatalog.gd")
-const LightingSystem = preload("res://scripts/systems/LightingSystem.gd")
-const SpawnSystem = preload("res://scripts/systems/SpawnSystem.gd")
+const LightingSystem    = preload("res://scripts/systems/LightingSystem.gd")
+const SpawnSystem       = preload("res://scripts/systems/SpawnSystem.gd")
 const StructureGenerator = preload("res://scripts/systems/StructureGenerator.gd")
-const HeartSystem = preload("res://scripts/systems/HeartSystem.gd")
-const TextureFactory = preload("res://scripts/factories/TextureFactory.gd")
-const PlaceableCatalog = preload("res://scripts/catalogs/PlaceableCatalog.gd")
-const ChestController = preload("res://scripts/controllers/ChestController.gd")
+const HeartSystem       = preload("res://scripts/systems/HeartSystem.gd")
+const TextureFactory    = preload("res://scripts/factories/TextureFactory.gd")
+const PlaceableCatalog  = preload("res://scripts/catalogs/PlaceableCatalog.gd")
+const ChestController   = preload("res://scripts/controllers/ChestController.gd")
 const DroppedItemController = preload("res://scripts/controllers/DroppedItemController.gd")
-const SaveGameSystem = preload("res://scripts/systems/SaveGameSystem.gd")
-const EnemyScene = preload("res://scenes/Enemy.tscn")
-const DebugSystem = preload("res://scripts/systems/DebugSystem.gd")
-const TerminalSystem = preload("res://scripts/systems/TerminalSystem.gd")
+const SaveGameSystem    = preload("res://scripts/systems/SaveGameSystem.gd")
+const EnemyScene        = preload("res://scenes/Enemy.tscn")
+const DebugSystem       = preload("res://scripts/systems/DebugSystem.gd")
+const TerminalSystem    = preload("res://scripts/systems/TerminalSystem.gd")
+const NpcController     = preload("res://scripts/controllers/NpcController.gd")
+const NPCCatalog        = preload("res://scripts/catalogs/NPCCatalog.gd")
 const CraftingSystem = preload("res://scripts/systems/CraftingSystem.gd")
 
 const TEST_CHEST_OFFSET := Vector2(64, -16)
@@ -46,10 +48,11 @@ const TRANSIENT_INPUT_ACTIONS := [
 
 @onready var world = $World
 @onready var player = $Player
-@onready var props_node: Node2D = get_node_or_null("Props")
-@onready var drops_node: Node2D = get_node_or_null("Drops")
+@onready var props_node: Node2D  = get_node_or_null("Props")
+@onready var drops_node: Node2D  = get_node_or_null("Drops")
 @onready var hud = $HudLayer/Hud
 @onready var enemies_node: Node2D = $Enemies
+var npcs_node: Node2D = null
 
 var current_encounter_band := ""
 var active_container
@@ -91,6 +94,9 @@ func _ready() -> void:
 		drops_node = Node2D.new()
 		drops_node.name = "Drops"
 		add_child(drops_node)
+	npcs_node = Node2D.new()
+	npcs_node.name = "NPCs"
+	add_child(npcs_node)
 	if hud.has_signal("world_drop_requested") and not hud.world_drop_requested.is_connected(_spawn_world_drop):
 		hud.world_drop_requested.connect(_spawn_world_drop)
 	if hud.has_signal("hotbar_slot_selected") and not hud.hotbar_slot_selected.is_connected(_select_hotbar_index):
@@ -103,6 +109,8 @@ func _ready() -> void:
 		hud.craft_hold_started.connect(_on_craft_hold_started)
 	if hud.has_signal("craft_hold_ended") and not hud.craft_hold_ended.is_connected(_on_craft_hold_ended):
 		hud.craft_hold_ended.connect(_on_craft_hold_ended)
+	if hud.has_signal("dialogue_event") and not hud.dialogue_event.is_connected(_on_dialogue_event):
+		hud.dialogue_event.connect(_on_dialogue_event)
 	world.player = player
 	world.container_parent = props_node
 	if world.has_signal("chest_broken") and not world.chest_broken.is_connected(_on_chest_broken):
@@ -111,6 +119,7 @@ func _ready() -> void:
 	_ensure_pause_menu()
 	_sync_selected_hotbar_item()
 	_spawn_test_chest()
+	_spawn_friendly_npcs()
 	var pending_save := SaveGameSystem.consume_pending_save(get_tree().root)
 	if pending_save.is_empty():
 		_spawn_band_encounter(BandCatalog.resolve_band_id(world.world_to_tile(player.global_position).y))
@@ -138,6 +147,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("pause_menu"):
+		if hud != null and hud.is_dialogue_open():
+			hud.close_dialogue()
+			get_viewport().set_input_as_handled()
+			return
+		if hud != null and hud.is_vendor_open():
+			hud.close_vendor()
+			get_viewport().set_input_as_handled()
+			return
 		_toggle_pause_menu()
 		get_viewport().set_input_as_handled()
 		return
@@ -179,7 +196,8 @@ func _process(delta: float) -> void:
 		return
 	structure_spawn_check_elapsed += delta
 	hud_light_refresh_elapsed += delta
-	_set_player_drag_lock(_is_item_drag_active())
+	# Lock player movement during dialogue; vendor leaves it unlocked.
+	_set_player_drag_lock(_is_item_drag_active() or (hud != null and hud.is_dialogue_open()))
 	if not _is_item_drag_active():
 		if Input.is_action_just_pressed("debug_band_1"):
 			_teleport_to_band(0)
@@ -196,7 +214,10 @@ func _process(delta: float) -> void:
 			_strike_nearby_enemy()
 		if Input.is_action_just_pressed("toggle_inventory"):
 			_toggle_player_inventory()
+		if Input.is_action_just_pressed("interact"):
+			_handle_interact()
 		_handle_hotbar_number_input()
+	_update_npc_proximity()
 	_update_crafting(delta)
 	_update_test_chest()
 	_update_placement_preview()
@@ -226,6 +247,7 @@ func _configure_input() -> void:
 	_add_key("use_flare", KEY_Q)
 	_add_key("place_beacon", KEY_R)
 	_add_key("toggle_inventory", KEY_I)
+	_add_key("interact", KEY_T)
 	_add_key("pause_menu", KEY_ESCAPE)
 	for index in range(HOTBAR_SIZE):
 		_add_key("hotbar_slot_%d" % [index + 1], KEY_1 + index)
@@ -1003,3 +1025,71 @@ func _hud_light_for_tile(player_tile: Vector2i) -> float:
 		cached_hud_light_tile = player_tile
 		hud_light_refresh_elapsed = 0.0
 	return cached_hud_light
+
+## ── NPC / Dialogue / Vendor ──────────────────────────────────────────────────
+
+func _spawn_friendly_npcs() -> void:
+	if not is_instance_valid(player):
+		return
+	# Spawn NPCs offset from the player start so they're immediately nearby.
+	_spawn_npc("wandering_merchant", player.global_position + Vector2(130.0,  0.0))
+	_spawn_npc("old_miner",          player.global_position + Vector2(-130.0, 0.0))
+	_spawn_npc("cave_hermit",        player.global_position + Vector2(260.0,  0.0))
+
+func _spawn_npc(npc_id: String, world_pos: Vector2) -> void:
+	if npcs_node == null:
+		return
+	var npc := NpcController.new()
+	npcs_node.add_child(npc)
+	npc.global_position = world_pos
+	npc.setup(npc_id)
+
+## Show/hide the [T] Talk prompt on each NPC each frame.
+func _update_npc_proximity() -> void:
+	if npcs_node == null or not is_instance_valid(player):
+		return
+	for child in npcs_node.get_children():
+		if child is NpcController:
+			child.set_nearby(child.is_player_in_range(player.global_position))
+
+## Called when T is pressed.
+func _handle_interact() -> void:
+	if hud == null:
+		return
+	if hud.is_dialogue_open():
+		hud.advance_dialogue()
+		return
+	_try_start_nearby_npc_dialogue()
+
+func _try_start_nearby_npc_dialogue() -> void:
+	if npcs_node == null or not is_instance_valid(player):
+		return
+	var nearest: NpcController = null
+	var nearest_dist := INF
+	for child in npcs_node.get_children():
+		if child is NpcController and child.is_player_in_range(player.global_position):
+			var d: float = child.global_position.distance_to(player.global_position)
+			if d < nearest_dist:
+				nearest_dist = d
+				nearest = child
+	if nearest == null:
+		return
+	var npc_def := NPCCatalog.get_npc(nearest.npc_id)
+	var node_ids: Array[String] = []
+	for id in npc_def.get("dialogue", []):
+		node_ids.append(String(id))
+	if node_ids.is_empty():
+		return
+	hud.open_dialogue(nearest.npc_id, node_ids)
+
+## Fired by HudController when a dialogue node has an event.
+func _on_dialogue_event(event_name: String, npc_id: String) -> void:
+	match event_name:
+		"open_shop":
+			var npc_def := NPCCatalog.get_npc(npc_id)
+			var shop_id := String(npc_def.get("shop", ""))
+			if shop_id != "" and player != null and player.get("inventory") != null:
+				hud.close_dialogue()
+				hud.open_vendor(shop_id, player.inventory)
+		_:
+			push_warning("Unhandled dialogue event '%s' from NPC '%s'" % [event_name, npc_id])

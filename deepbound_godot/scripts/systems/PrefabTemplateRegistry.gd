@@ -343,6 +343,7 @@ static func _instantiate_template_for_region(seed: int, template: Dictionary, re
 	var world_anchor := region_origin + anchor_offset
 	var transform := _choose_transform(seed, template, region_coord)
 	var structure := instantiate_template(template, world_anchor, transform)
+	structure.id = "template_%s_%d_%d" % [String(template.id), region_coord.x, region_coord.y]
 	structure.region = region_coord
 	if not _structure_matches_bands(structure, template):
 		structure_region_cache[cache_key] = {}

@@ -1,6 +1,8 @@
 extends RefCounted
 class_name EquipmentSystem
 
+const EquipmentCatalog = preload("res://scripts/catalogs/EquipmentCatalog.gd")
+
 ## Manages the 7 equipment slots as a separate data structure from the main
 ## inventory.  Emits equipment_changed whenever a slot is modified so that
 ## StatCalculator can recompute derived stats.

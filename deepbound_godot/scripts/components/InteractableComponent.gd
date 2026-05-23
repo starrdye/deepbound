@@ -49,7 +49,8 @@ func _build_hint_label() -> void:
 ## Returns true when `world_pos` is within interact_radius of the host node.
 ## Uses the parent's global_position when available (host node may have moved).
 func is_nearby(world_pos: Vector2) -> bool:
-	var origin := get_parent().global_position if get_parent() != null else global_position
+	var par := get_parent()
+	var origin: Vector2 = (par as Node2D).global_position if par is Node2D else global_position
 	return origin.distance_to(world_pos) <= interact_radius
 
 ## Call once per frame with the player's world position.

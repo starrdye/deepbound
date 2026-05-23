@@ -1,6 +1,9 @@
 extends RefCounted
 class_name StatCalculator
 
+const EquipmentSystem  = preload("res://scripts/systems/EquipmentSystem.gd")
+const EquipmentCatalog = preload("res://scripts/catalogs/EquipmentCatalog.gd")
+
 ## Derives all equipment-based stat bonuses from an EquipmentSystem snapshot.
 ##
 ## Stat keys consumed:

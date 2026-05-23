@@ -17,7 +17,10 @@ const DebugSystem       = preload("res://scripts/systems/DebugSystem.gd")
 const TerminalSystem    = preload("res://scripts/systems/TerminalSystem.gd")
 const NpcController     = preload("res://scripts/controllers/NpcController.gd")
 const NPCCatalog        = preload("res://scripts/catalogs/NPCCatalog.gd")
-const CraftingSystem = preload("res://scripts/systems/CraftingSystem.gd")
+const CraftingSystem    = preload("res://scripts/systems/CraftingSystem.gd")
+const EquipmentSystem  = preload("res://scripts/systems/EquipmentSystem.gd")
+const StatCalculator   = preload("res://scripts/systems/StatCalculator.gd")
+const EquipmentCatalog = preload("res://scripts/catalogs/EquipmentCatalog.gd")
 
 const TEST_CHEST_OFFSET := Vector2(64, -16)
 const TEST_CHEST_OPEN_DISTANCE := 46.0
@@ -54,6 +57,7 @@ const TRANSIENT_INPUT_ACTIONS := [
 @onready var enemies_node: Node2D = $Enemies
 var npcs_node: Node2D = null
 
+var equipment_system: EquipmentSystem = null
 var current_encounter_band := ""
 var active_container
 var selected_hotbar_index := 0
@@ -111,6 +115,10 @@ func _ready() -> void:
 		hud.craft_hold_ended.connect(_on_craft_hold_ended)
 	if hud.has_signal("dialogue_event") and not hud.dialogue_event.is_connected(_on_dialogue_event):
 		hud.dialogue_event.connect(_on_dialogue_event)
+	equipment_system = EquipmentSystem.new()
+	equipment_system.equipment_changed.connect(_on_equipment_changed)
+	if hud.has_method("set_equipment_system"):
+		hud.set_equipment_system(equipment_system)
 	world.player = player
 	world.container_parent = props_node
 	if world.has_signal("chest_broken") and not world.chest_broken.is_connected(_on_chest_broken):
@@ -984,9 +992,14 @@ func _change_scene_from_pause(path: String) -> void:
 	get_tree().change_scene_to_file(path)
 
 func _strike_nearby_enemy() -> void:
+	var base_damage := 3
+	if equipment_system != null:
+		var eq_def := EquipmentCatalog.get_equippable(equipment_system.get_item("weapon"))
+		if not eq_def.is_empty():
+			base_damage = int(eq_def.get("stats", {}).get("damage", base_damage))
 	for child in enemies_node.get_children():
 		if child.has_method("take_damage") and child.alive and child.global_position.distance_to(player.global_position) < 42.0:
-			child.take_damage(12)
+			child.take_damage(base_damage)
 
 func _update_hud() -> void:
 	var player_tile: Vector2i = world.world_to_tile(player.global_position)
@@ -1093,3 +1106,16 @@ func _on_dialogue_event(event_name: String, npc_id: String) -> void:
 				hud.open_vendor(shop_id, player.inventory)
 		_:
 			push_warning("Unhandled dialogue event '%s' from NPC '%s'" % [event_name, npc_id])
+
+## ── Equipment stat recalculation ─────────────────────────────────────────────
+
+func _on_equipment_changed() -> void:
+	if equipment_system == null or player == null:
+		return
+	var stats := StatCalculator.compute(equipment_system)
+	player.set_equipment_health_delta(int(stats.get("health_max", 0)))
+	player.set_equipment_speed_bonus(float(stats.get("speed", 0.0)))
+	player.set_equipment_defense_bonus(int(stats.get("defense", 0)))
+	var utility_radius := StatCalculator.get_utility_light_radius(equipment_system)
+	if world != null and world.has_method("set_player_utility_light"):
+		world.set_player_utility_light(utility_radius)

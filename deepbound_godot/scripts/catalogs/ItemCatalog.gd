@@ -122,6 +122,24 @@ const ITEMS := {
 		"rarity": "epic",
 		"category": "weapon",
 	},
+	"workbench": {
+		"name": "Workbench",
+		"desc": "Unlocks basic crafting recipes.\nPlace it nearby to use.",
+		"rarity": "common",
+		"category": "placeable",
+	},
+	"furnace": {
+		"name": "Furnace",
+		"desc": "Smelts ores and processes materials.\nNeeded for advanced recipes.",
+		"rarity": "common",
+		"category": "placeable",
+	},
+	"anvil": {
+		"name": "Anvil",
+		"desc": "Forges powerful weapons and tools.\nRequires a Workbench and Furnace.",
+		"rarity": "uncommon",
+		"category": "placeable",
+	},
 }
 
 static func get_item(item_id: String) -> Dictionary:

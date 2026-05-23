@@ -15,6 +15,7 @@ const SaveGameSystem = preload("res://scripts/systems/SaveGameSystem.gd")
 const EnemyScene = preload("res://scenes/Enemy.tscn")
 const DebugSystem = preload("res://scripts/systems/DebugSystem.gd")
 const TerminalSystem = preload("res://scripts/systems/TerminalSystem.gd")
+const CraftingSystem = preload("res://scripts/systems/CraftingSystem.gd")
 
 const TEST_CHEST_OFFSET := Vector2(64, -16)
 const TEST_CHEST_OPEN_DISTANCE := 46.0
@@ -27,6 +28,9 @@ const STRUCTURE_SPAWN_CHECK_INTERVAL_SECONDS := 0.20
 const HUD_LIGHT_REFRESH_INTERVAL_SECONDS := 0.12
 const MAIN_MENU_SCENE_PATH := "res://scenes/MainMenu.tscn"
 const PREFAB_DESIGNER_SCENE_PATH := "res://scenes/PrefabDesigner.tscn"
+const STATION_CHECK_INTERVAL := 0.35
+const CRAFT_HOLD_DELAY := 0.40
+const CRAFT_HOLD_INTERVAL := 0.10
 
 const TRANSIENT_INPUT_ACTIONS := [
 	"move_left",
@@ -64,6 +68,11 @@ var pause_menu_layer: CanvasLayer
 var pause_status_label: Label
 var pause_load_button: Button
 var pause_menu_open := false
+var active_craft_stations: Dictionary = {}
+var _station_check_elapsed := STATION_CHECK_INTERVAL
+var _craft_held_recipe_id := ""
+var _craft_hold_elapsed := 0.0
+var _craft_hold_fired := false
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_FOCUS_IN:
@@ -90,6 +99,10 @@ func _ready() -> void:
 		hud.drag_state_changed.connect(_set_hud_drag_active)
 	if hud.has_signal("terminal_command") and not hud.terminal_command.is_connected(_on_terminal_command):
 		hud.terminal_command.connect(_on_terminal_command)
+	if hud.has_signal("craft_hold_started") and not hud.craft_hold_started.is_connected(_on_craft_hold_started):
+		hud.craft_hold_started.connect(_on_craft_hold_started)
+	if hud.has_signal("craft_hold_ended") and not hud.craft_hold_ended.is_connected(_on_craft_hold_ended):
+		hud.craft_hold_ended.connect(_on_craft_hold_ended)
 	world.player = player
 	world.container_parent = props_node
 	if world.has_signal("chest_broken") and not world.chest_broken.is_connected(_on_chest_broken):
@@ -184,6 +197,7 @@ func _process(delta: float) -> void:
 		if Input.is_action_just_pressed("toggle_inventory"):
 			_toggle_player_inventory()
 		_handle_hotbar_number_input()
+	_update_crafting(delta)
 	_update_test_chest()
 	_update_placement_preview()
 	var band_id := BandCatalog.resolve_band_id(world.world_to_tile(player.global_position).y)
@@ -317,6 +331,61 @@ func _spawn_nearby_structure_encounters(player_tile: Vector2i) -> void:
 				continue
 			_spawn_enemy(String(spawn.enemy_id), spawn.position)
 		spawned_structure_encounters[structure_id] = true
+
+## ── Crafting ─────────────────────────────────────────────────────────────────
+
+func _update_crafting(delta: float) -> void:
+	if hud == null or player == null or player.get("inventory") == null:
+		return
+	# Station scan + craft-list refresh (only while inventory is open, not container)
+	if bool(hud.get("inventory_open")) and not bool(hud.get("container_open")):
+		_station_check_elapsed += delta
+		if _station_check_elapsed >= STATION_CHECK_INTERVAL:
+			_station_check_elapsed = 0.0
+			active_craft_stations = CraftingSystem.detect_active_stations(world, player.global_position)
+			var statuses := CraftingSystem.get_craftable_statuses(player.inventory, active_craft_stations)
+			if hud.has_method("receive_craft_statuses"):
+				hud.receive_craft_statuses(statuses)
+	# Mass craft hold timer
+	if _craft_held_recipe_id != "":
+		_craft_hold_elapsed += delta
+		if not _craft_hold_fired:
+			if _craft_hold_elapsed >= CRAFT_HOLD_DELAY:
+				_craft_hold_fired = true
+				_craft_hold_elapsed = 0.0
+		else:
+			if _craft_hold_elapsed >= CRAFT_HOLD_INTERVAL:
+				_craft_hold_elapsed -= CRAFT_HOLD_INTERVAL
+				_do_craft(_craft_held_recipe_id)
+
+func _on_craft_hold_started(recipe_id: String) -> void:
+	_craft_held_recipe_id = recipe_id
+	_craft_hold_elapsed = 0.0
+	_craft_hold_fired = false
+	_do_craft(recipe_id)
+
+func _on_craft_hold_ended() -> void:
+	_craft_held_recipe_id = ""
+	_craft_hold_elapsed = 0.0
+	_craft_hold_fired = false
+
+func _do_craft(recipe_id: String) -> void:
+	if player == null or player.get("inventory") == null or hud == null:
+		return
+	active_craft_stations = CraftingSystem.detect_active_stations(world, player.global_position)
+	var stack := CraftingSystem.execute_craft(recipe_id, player.inventory, active_craft_stations)
+	if stack.is_empty():
+		# Ran out of ingredients or lost station — stop mass crafting
+		_craft_held_recipe_id = ""
+		return
+	if hud.has_method("receive_crafted_item"):
+		hud.receive_crafted_item(stack)
+	var statuses := CraftingSystem.get_craftable_statuses(player.inventory, active_craft_stations)
+	if hud.has_method("receive_craft_statuses"):
+		hud.receive_craft_statuses(statuses)
+	_sync_selected_hotbar_item()
+
+## ─────────────────────────────────────────────────────────────────────────────
 
 func _spawn_test_chest() -> void:
 	if props_node == null or not is_instance_valid(player):

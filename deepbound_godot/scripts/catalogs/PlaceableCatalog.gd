@@ -10,6 +10,9 @@ const PLACEABLES := {
 	"dirt_background_block": {"kind": "background", "background": "dirt_background_block", "count": 1},
 	"stone_background_block": {"kind": "background", "background": "stone_background_block", "count": 1},
 	"wooden_background_block": {"kind": "background", "background": "wooden_background_block", "count": 1},
+	"workbench": {"kind": "tile", "tile": "workbench_block", "count": 1},
+	"furnace":   {"kind": "tile", "tile": "furnace_block",   "count": 1},
+	"anvil":     {"kind": "tile", "tile": "anvil_block",     "count": 1},
 }
 
 static func is_placeable(item_id: String) -> bool:

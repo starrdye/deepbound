@@ -11,6 +11,8 @@ signal world_drop_requested(stack: Dictionary)
 signal hotbar_slot_selected(index: int)
 signal drag_state_changed(active: bool)
 signal terminal_command(cmd: String)
+signal craft_hold_started(recipe_id: String)
+signal craft_hold_ended()
 
 const SLOT_SIZE := 36.0
 const SLOT_GAP := 4.0
@@ -31,6 +33,10 @@ const TOOLTIP_PAD := 10.0
 const TOOLTIP_NAME_SZ := 14
 const TOOLTIP_BODY_SZ := 11
 const TOOLTIP_LINE_GAP := 3.0
+
+const CRAFT_VISIBLE_SLOTS := 4
+const CRAFT_FOOTER_H := 24.0
+const CRAFT_PANEL_W := 148.0
 
 var health_label: Label
 var inventory_label: Label
@@ -57,6 +63,20 @@ var _tooltip_lines: Array[Dictionary] = []
 var _tooltip_panel_w := 0.0
 var _tooltip_panel_h := 0.0
 var _tooltip_border_color := Color.TRANSPARENT
+
+## Crafting panel state
+var _craft_statuses: Array[Dictionary] = []
+var _craft_scroll: int = 0
+var _craft_show_all: bool = false
+var _craft_held_recipe_id: String = ""
+var _hovered_craft_id: String = ""
+
+## Craft ingredient tooltip — rebuilt on recipe hover change
+var _craft_tooltip_lines: Array[Dictionary] = []
+var _craft_tooltip_pw: float = 0.0
+var _craft_tooltip_ph: float = 0.0
+var _craft_tooltip_border: Color = Color.TRANSPARENT
+var _craft_tooltip_cached_id: String = ""
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -99,11 +119,15 @@ func close_container() -> void:
 func close_inventory() -> void:
 	if not inventory_open:
 		return
+	if _craft_held_recipe_id != "":
+		_craft_held_recipe_id = ""
+		craft_hold_ended.emit()
 	_flush_cursor_stack()
 	inventory_open = false
 	container_open = false
 	container_inventory = null
 	_hovered_item_id = ""
+	_hovered_craft_id = ""
 	queue_redraw()
 
 func _flush_cursor_stack() -> void:
@@ -176,11 +200,14 @@ func _draw() -> void:
 	_draw_hotbar()
 	if inventory_open:
 		_draw_inventory_panel(_player_panel_rect(), "Inventory", player_inventory, PLAYER_COLS, "player")
+		if not container_open:
+			_draw_crafting_panel()
 	if container_open:
 		_draw_inventory_panel(_container_panel_rect(), container_title, container_inventory, CONTAINER_COLS, "container")
 	if inventory_open:
 		_draw_cursor_stack()
 	_draw_tooltip()
+	_draw_craft_tooltip()
 
 func _draw_hearts(origin: Vector2) -> void:
 	var states: Array = hud_state.get(
@@ -268,10 +295,16 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if inventory_open:
 			if event.pressed:
+				if not container_open and _handle_craft_press(event.position):
+					queue_redraw()
+					return
 				if _handle_mouse_press(event.position):
 					queue_redraw()
 					return
 			else:
+				if not container_open and _handle_craft_release(event.position):
+					queue_redraw()
+					return
 				if _handle_mouse_release(event.position):
 					queue_redraw()
 					return
@@ -285,19 +318,44 @@ func _gui_input(event: InputEvent) -> void:
 			if hotbar_index >= 0:
 				hotbar_slot_selected.emit(hotbar_index)
 				accept_event()
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		if inventory_open and not container_open and _crafting_panel_rect().has_point(event.position):
+			accept_event()
+			return
+	elif event is InputEventMouseButton and event.pressed and (event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN):
+		if inventory_open and not container_open and _crafting_panel_rect().has_point(event.position):
+			_craft_scroll_by(1 if event.button_index == MOUSE_BUTTON_WHEEL_DOWN else -1)
+			queue_redraw()
+			accept_event()
+			return
 	elif event is InputEventMouseMotion:
 		if not _is_empty_stack(cursor_stack):
 			queue_redraw()
 		else:
 			var new_hover := _item_id_at(event.position)
+			var new_craft_id := _craft_id_at(event.position)
+			if new_craft_id != "":
+				new_hover = ""
+			var needs_redraw := false
 			if new_hover != _hovered_item_id:
 				_hovered_item_id = new_hover
 				if new_hover != "":
 					var font := get_theme_default_font()
 					if font != null:
 						_rebuild_tooltip_layout(new_hover, font)
-				queue_redraw()
+				needs_redraw = true
 			elif _hovered_item_id != "":
+				needs_redraw = true
+			if new_craft_id != _hovered_craft_id:
+				_hovered_craft_id = new_craft_id
+				if new_craft_id != "":
+					var font := get_theme_default_font()
+					if font != null:
+						_rebuild_craft_tooltip(new_craft_id, font)
+				needs_redraw = true
+			elif _hovered_craft_id != "":
+				needs_redraw = true
+			if needs_redraw:
 				queue_redraw()
 
 func _handle_mouse_press(point: Vector2) -> bool:
@@ -450,19 +508,19 @@ func _slot_at_panel(point: Vector2, panel_rect: Rect2, inventory, cols: int, pan
 			return {"panel": panel_id, "index": index, "inventory": inventory, "rect": slot_rect}
 	return {}
 
-func _draw_stack(stack: Dictionary, slot_rect: Rect2) -> void:
+func _draw_stack(stack: Dictionary, slot_rect: Rect2, tint := Color.WHITE) -> void:
 	if _is_empty_stack(stack):
 		return
 	var texture := TextureFactory.make_item_texture(String(stack.item))
 	var item_rect := Rect2(slot_rect.position + Vector2(6, 5), Vector2(24, 24))
 	if texture != null:
-		draw_texture_rect(texture, item_rect, false)
+		draw_texture_rect(texture, item_rect, false, tint)
 	else:
-		draw_rect(item_rect.grow(-5), Color8(255, 214, 107), true)
+		draw_rect(item_rect.grow(-5), Color8(255, 214, 107) * tint, true)
 	if int(stack.count) > 1:
 		var font := get_theme_default_font()
 		if font != null:
-			draw_string(font, slot_rect.position + Vector2(18, 31), str(stack.count), HORIZONTAL_ALIGNMENT_RIGHT, 15.0, 11, Color8(255, 238, 154))
+			draw_string(font, slot_rect.position + Vector2(18, 31), str(stack.count), HORIZONTAL_ALIGNMENT_RIGHT, 15.0, 11, Color8(255, 238, 154) * tint)
 
 func _draw_hotbar() -> void:
 	var slots: Array = hud_state.get("hotbar_slots", [])
@@ -589,6 +647,241 @@ func _draw_tooltip() -> void:
 
 	var cy := py + TOOLTIP_PAD
 	for ld in _tooltip_lines:
+		var sz := int(ld.size)
+		if String(ld.text) == "":
+			cy += float(sz) + TOOLTIP_LINE_GAP
+			continue
+		draw_string(font, Vector2(px + TOOLTIP_PAD, cy + sz), String(ld.text),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, sz, ld.color)
+		cy += float(sz) + TOOLTIP_LINE_GAP
+
+## ── Crafting panel ───────────────────────────────────────────────────────────
+
+func receive_craft_statuses(statuses: Array[Dictionary]) -> void:
+	_craft_statuses = statuses
+	var max_scroll := maxi(0, _visible_recipes().size() - CRAFT_VISIBLE_SLOTS)
+	_craft_scroll = clampi(_craft_scroll, 0, max_scroll)
+	if _hovered_craft_id != "":
+		var font := get_theme_default_font()
+		if font != null:
+			_rebuild_craft_tooltip(_hovered_craft_id, font)
+	if inventory_open and not container_open:
+		queue_redraw()
+
+## Places a crafted item onto cursor (modifier-bearing) or directly into inventory.
+func receive_crafted_item(stack: Dictionary) -> void:
+	if _is_empty_stack(stack) or player_inventory == null:
+		return
+	var has_modifier := stack.has("modifier") and String(stack.get("modifier", "")) != ""
+	if has_modifier and _is_empty_stack(cursor_stack):
+		cursor_stack = stack.duplicate()
+		drag_source = {}
+		drag_state_changed.emit(true)
+		queue_redraw()
+		return
+	var remaining := player_inventory.add_item(String(stack.item), int(stack.count))
+	if remaining > 0:
+		var leftover := stack.duplicate()
+		leftover.count = remaining
+		world_drop_requested.emit(leftover)
+	queue_redraw()
+
+func _crafting_panel_rect() -> Rect2:
+	if not inventory_open or player_inventory == null:
+		return Rect2()
+	var inv_rect := _player_panel_rect()
+	var slot_h := float(CRAFT_VISIBLE_SLOTS) * (SLOT_SIZE + SLOT_GAP) - SLOT_GAP
+	var panel_h := PANEL_PADDING * 2.0 + PANEL_HEADER + slot_h + 8.0 + CRAFT_FOOTER_H
+	return Rect2(
+		Vector2(inv_rect.position.x - CRAFT_PANEL_W - 8.0, inv_rect.position.y),
+		Vector2(CRAFT_PANEL_W, panel_h)
+	)
+
+func _craft_show_all_button_rect() -> Rect2:
+	var panel := _crafting_panel_rect()
+	return Rect2(
+		panel.position + Vector2(PANEL_PADDING, panel.size.y - PANEL_PADDING - CRAFT_FOOTER_H),
+		Vector2(CRAFT_PANEL_W - PANEL_PADDING * 2.0, CRAFT_FOOTER_H)
+	)
+
+## Rect for the icon-sized slot portion of crafting row `visible_index`.
+func _craft_item_slot_rect(visible_index: int) -> Rect2:
+	var panel := _crafting_panel_rect()
+	var y := panel.position.y + PANEL_PADDING + PANEL_HEADER + float(visible_index) * (SLOT_SIZE + SLOT_GAP)
+	return Rect2(
+		Vector2(panel.position.x + PANEL_PADDING, y),
+		Vector2(CRAFT_PANEL_W - PANEL_PADDING * 2.0, SLOT_SIZE)
+	)
+
+func _visible_recipes() -> Array[Dictionary]:
+	if _craft_show_all:
+		return _craft_statuses
+	var result: Array[Dictionary] = []
+	for s in _craft_statuses:
+		if bool(s.get("craftable", false)):
+			result.append(s)
+	return result
+
+func _craft_scroll_by(delta: int) -> void:
+	var max_scroll := maxi(0, _visible_recipes().size() - CRAFT_VISIBLE_SLOTS)
+	_craft_scroll = clampi(_craft_scroll + delta, 0, max_scroll)
+
+## Returns the recipe_id of the recipe slot under `point`, or "" if none.
+func _craft_id_at(point: Vector2) -> String:
+	if not inventory_open or container_open or _craft_statuses.is_empty():
+		return ""
+	var visible := _visible_recipes()
+	for i in range(mini(CRAFT_VISIBLE_SLOTS, visible.size())):
+		if _craft_item_slot_rect(i).has_point(point):
+			return String(visible[_craft_scroll + i].get("id", ""))
+	return ""
+
+func _handle_craft_press(point: Vector2) -> bool:
+	var panel := _crafting_panel_rect()
+	if not panel.has_point(point):
+		return false
+	if _craft_show_all_button_rect().has_point(point):
+		_craft_show_all = not _craft_show_all
+		_craft_scroll = 0
+		accept_event()
+		return true
+	var visible := _visible_recipes()
+	var vis_idx := -1
+	for i in range(mini(CRAFT_VISIBLE_SLOTS, visible.size())):
+		if _craft_item_slot_rect(i).has_point(point):
+			vis_idx = i
+			break
+	if vis_idx < 0:
+		accept_event()
+		return true
+	var status := visible[_craft_scroll + vis_idx]
+	if not bool(status.get("craftable", false)):
+		accept_event()
+		return true
+	var recipe_id := String(status.get("id", ""))
+	_craft_held_recipe_id = recipe_id
+	craft_hold_started.emit(recipe_id)
+	accept_event()
+	return true
+
+func _handle_craft_release(point: Vector2) -> bool:
+	if _craft_held_recipe_id == "":
+		return false
+	_craft_held_recipe_id = ""
+	craft_hold_ended.emit()
+	accept_event()
+	return true
+
+func _draw_crafting_panel() -> void:
+	if not inventory_open or container_open or _craft_statuses.is_empty():
+		return
+	var panel := _crafting_panel_rect()
+	_panel(panel)
+	var font := get_theme_default_font()
+	if font != null:
+		draw_string(font, panel.position + Vector2(PANEL_PADDING, 19),
+			"Crafting", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 15, Color8(244, 231, 192))
+	var visible := _visible_recipes()
+	for i in range(mini(CRAFT_VISIBLE_SLOTS, visible.size())):
+		var status := visible[_craft_scroll + i]
+		var recipe := status.get("recipe", {}) as Dictionary
+		var result_id := String(recipe.get("result", ""))
+		var craftable := bool(status.get("craftable", false))
+		var slot_rect := _craft_item_slot_rect(i)
+		var is_hovered := _hovered_craft_id == String(status.get("id", ""))
+		var bg := Color(0.14, 0.12, 0.16, 0.95) if is_hovered else Color(0.08, 0.075, 0.085, 0.92)
+		var border := Color8(160, 160, 180) if is_hovered else Color8(91, 100, 107)
+		draw_rect(slot_rect, bg, true)
+		draw_rect(slot_rect, border, false, 1.0)
+		var tint := Color.WHITE if craftable else Color(1.0, 1.0, 1.0, 0.35)
+		_draw_stack({"item": result_id, "count": 1, "stack_cap": 99},
+			Rect2(slot_rect.position, Vector2(SLOT_SIZE, SLOT_SIZE)), tint)
+		if font != null:
+			var def := ItemCatalog.get_item(result_id)
+			var item_name := String(def.get("name", result_id.replace("_", " ").capitalize()))
+			var name_col := Color(ItemCatalog.rarity_color(String(def.get("rarity", "common"))), 1.0 if craftable else 0.35)
+			draw_string(font,
+				Vector2(slot_rect.position.x + SLOT_SIZE + 4.0, slot_rect.position.y + 22.0),
+				item_name, HORIZONTAL_ALIGNMENT_LEFT, slot_rect.size.x - SLOT_SIZE - 4.0, 11, name_col)
+	# Footer: show-all toggle + count indicator
+	var btn := _craft_show_all_button_rect()
+	var btn_bg := Color8(40, 55, 78) if _craft_show_all else Color(0.08, 0.075, 0.085, 0.92)
+	draw_rect(btn, btn_bg, true)
+	draw_rect(btn, Color8(91, 100, 107), false, 1.0)
+	if font != null:
+		var craftable_count := 0
+		for s in _craft_statuses:
+			if bool(s.get("craftable", false)):
+				craftable_count += 1
+		var btn_label := "Show All (%d)" % _craft_statuses.size() if _craft_show_all \
+			else "Craftable (%d)" % craftable_count
+		draw_string(font, Vector2(btn.position.x, btn.position.y + 16.0),
+			btn_label, HORIZONTAL_ALIGNMENT_CENTER, btn.size.x, 10, Color8(200, 200, 210))
+
+## ── Craft ingredient tooltip ─────────────────────────────────────────────────
+
+func _rebuild_craft_tooltip(recipe_id: String, font: Font) -> void:
+	_craft_tooltip_cached_id = recipe_id
+	_craft_tooltip_lines.clear()
+	var recipe := {}
+	for s in _craft_statuses:
+		if String(s.get("id", "")) == recipe_id:
+			recipe = s.get("recipe", {}) as Dictionary
+			break
+	if recipe.is_empty():
+		return
+	var result_id := String(recipe.get("result", ""))
+	var def := ItemCatalog.get_item(result_id)
+	var item_name := String(def.get("name", result_id.replace("_", " ").capitalize()))
+	var rarity := String(def.get("rarity", "common"))
+	var rarity_col := ItemCatalog.rarity_color(rarity)
+	_craft_tooltip_border = Color(rarity_col, 0.80)
+	_craft_tooltip_lines.append({"text": item_name, "color": rarity_col, "size": TOOLTIP_NAME_SZ})
+	var stations: Array = recipe.get("stations", [])
+	if stations.size() > 0:
+		_craft_tooltip_lines.append({
+			"text": "Needs: " + ", ".join(stations),
+			"color": Color8(200, 190, 110),
+			"size": TOOLTIP_BODY_SZ,
+		})
+	_craft_tooltip_lines.append({"text": "", "color": Color.WHITE, "size": 5})
+	_craft_tooltip_lines.append({"text": "Ingredients:", "color": Color8(180, 180, 180), "size": TOOLTIP_BODY_SZ})
+	for ing in recipe.get("ingredients", []):
+		var ing_id    := String(ing.item)
+		var ing_count := int(ing.count)
+		var have := player_inventory.count_item(ing_id) if player_inventory != null else 0
+		var ing_def   := ItemCatalog.get_item(ing_id)
+		var ing_name  := String(ing_def.get("name", ing_id.replace("_", " ").capitalize()))
+		var line_col  := Color8(100, 220, 100) if have >= ing_count else Color8(220, 80, 80)
+		_craft_tooltip_lines.append({
+			"text": "%s  %d/%d" % [ing_name, have, ing_count],
+			"color": line_col,
+			"size": TOOLTIP_BODY_SZ,
+		})
+	var max_w := 0.0
+	_craft_tooltip_ph = TOOLTIP_PAD * 2.0
+	for ld in _craft_tooltip_lines:
+		_craft_tooltip_ph += float(int(ld.size)) + TOOLTIP_LINE_GAP
+		if String(ld.text) != "":
+			max_w = maxf(max_w, font.get_string_size(String(ld.text), HORIZONTAL_ALIGNMENT_LEFT, -1, int(ld.size)).x)
+	_craft_tooltip_pw = max_w + TOOLTIP_PAD * 2.0
+
+func _draw_craft_tooltip() -> void:
+	if TerminalSystem.is_open or _hovered_craft_id == "" or _craft_tooltip_lines.is_empty():
+		return
+	var font := get_theme_default_font()
+	if font == null:
+		return
+	var mouse_pos := get_local_mouse_position()
+	var vsize := get_viewport_rect().size
+	var px := clampf(mouse_pos.x + 18.0, 4.0, vsize.x - _craft_tooltip_pw - 4.0)
+	var py := clampf(mouse_pos.y - _craft_tooltip_ph - 12.0, 4.0, vsize.y - _craft_tooltip_ph - 4.0)
+	var panel_rect := Rect2(Vector2(px, py), Vector2(_craft_tooltip_pw, _craft_tooltip_ph))
+	draw_rect(Rect2(panel_rect.position + Vector2(3.0, 3.0), panel_rect.size), Color(0, 0, 0, 0.4), true)
+	draw_rect(panel_rect, Color(0.04, 0.04, 0.09, 0.96), true)
+	draw_rect(panel_rect, _craft_tooltip_border, false, 1.5)
+	var cy := py + TOOLTIP_PAD
+	for ld in _craft_tooltip_lines:
 		var sz := int(ld.size)
 		if String(ld.text) == "":
 			cy += float(sz) + TOOLTIP_LINE_GAP

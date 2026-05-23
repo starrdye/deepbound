@@ -151,6 +151,15 @@ func swap(slot_id: String, incoming_item: String) -> String:
 	equipment_changed.emit()
 	return displaced
 
+## Apply (or clear) a modifier on the item currently in slot_id without moving
+## the item.  Returns false if the slot is empty or unknown.
+func apply_modifier(slot_id: String, modifier_id: String) -> bool:
+	if not _slots.has(slot_id) or String(_slots.get(slot_id, "")) == "":
+		return false
+	_slot_modifiers[slot_id] = modifier_id
+	equipment_changed.emit()
+	return true
+
 ## Swap: place incoming_stack into slot_id, preserving its modifier.
 ## Returns the displaced stack dict; returns incoming_stack unchanged if rejected.
 func swap_stack(slot_id: String, incoming_stack: Dictionary) -> Dictionary:

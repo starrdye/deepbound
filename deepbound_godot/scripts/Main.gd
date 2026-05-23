@@ -831,52 +831,95 @@ func _on_terminal_command(cmd: String) -> void:
 						TerminalSystem.push_output("[ERR] Unknown band: %d  (use 1, 2, or 3)" % band_num)
 		"give":
 			if parts.size() < 2:
-				TerminalSystem.push_output("[ERR] Usage: give <item_id> [count]")
+				TerminalSystem.push_output("[ERR] Usage: give <item_id> [count] [modifier_id]")
+				TerminalSystem.push_output("  give wooden_sword 1 sharp")
 			else:
 				var item_id: String = parts[1]
-				var count := int(parts[2]) if parts.size() >= 3 else 1
-				count = maxi(1, count)
+				# Second arg is count when it is a valid integer, otherwise treated as modifier.
+				var count := 1
+				var mod_id := ""
+				if parts.size() >= 3:
+					if parts[2].is_valid_int():
+						count = maxi(1, int(parts[2]))
+						if parts.size() >= 4:
+							mod_id = parts[3]
+					else:
+						mod_id = parts[2]
 				if is_instance_valid(player) and player.inventory != null:
-					var remaining: int = player.inventory.add_item(item_id, count)
+					var remaining: int
+					if mod_id != "" and player.inventory.has_method("add_stack"):
+						var cap := 1 if EquipmentCatalog.is_equippable(item_id) else 99
+						remaining = player.inventory.add_stack({"item": item_id, "count": count, "stack_cap": cap, "modifier": mod_id})
+					else:
+						remaining = player.inventory.add_item(item_id, count)
 					var added := count - remaining
 					if added > 0:
-						TerminalSystem.push_output("[OK] Added %d × %s" % [added, item_id])
+						if mod_id != "":
+							TerminalSystem.push_output("[OK] Added %d × %s (%s)" % [added, item_id, mod_id])
+						else:
+							TerminalSystem.push_output("[OK] Added %d × %s" % [added, item_id])
 					else:
 						TerminalSystem.push_output("[ERR] Inventory full or unknown item: %s" % item_id)
 				else:
 					TerminalSystem.push_output("[ERR] Player inventory not available")
-		"spawn":
-			if parts.size() < 2:
-				TerminalSystem.push_output("[ERR] Usage: spawn <enemy_id>")
+		"respawn":
+			if parts.size() < 3:
+				TerminalSystem.push_output("[ERR] Usage: respawn <monster|npc|boss> <id>")
+				TerminalSystem.push_output("  respawn monster cave_skitter")
+				TerminalSystem.push_output("  respawn npc wandering_merchant")
+				TerminalSystem.push_output("  respawn boss 1  (or: giant_ant_queen)")
+			elif not is_instance_valid(player):
+				TerminalSystem.push_output("[ERR] Player not available")
 			else:
-				var enemy_id: String = parts[1]
-				if is_instance_valid(player):
-					_spawn_enemy(enemy_id, player.global_position + Vector2(96, 0))
-					TerminalSystem.push_output("[OK] Spawned enemy: %s" % enemy_id)
-				else:
-					TerminalSystem.push_output("[ERR] Player not available")
-		"npc":
+				var r_type := parts[1]
+				var r_id   := parts[2]
+				match r_type:
+					"monster":
+						_spawn_enemy(r_id, player.global_position + Vector2(96, 0))
+						TerminalSystem.push_output("[OK] Spawned monster: %s" % r_id)
+					"npc":
+						_spawn_npc(r_id, player.global_position + Vector2(80, 0))
+						TerminalSystem.push_output("[OK] Spawned NPC: %s" % r_id)
+					"boss":
+						# Numeric alias: 1 → giant_ant_queen
+						var boss_id := r_id
+						if r_id == "1":
+							boss_id = "giant_ant_queen"
+						# Kill any live copy of this boss first
+						if bosses_node != null:
+							for child in bosses_node.get_children():
+								if child.name == boss_id:
+									child.queue_free()
+						# Clear defeated flag so _spawn_boss doesn't block it
+						BossEncounterSystem.defeated_bosses.erase(boss_id)
+						_spawn_boss(boss_id, player.global_position + Vector2(200, 0))
+						TerminalSystem.push_output("[OK] Respawned boss: %s" % boss_id)
+					_:
+						TerminalSystem.push_output("[ERR] Unknown type '%s' — use: monster | npc | boss" % r_type)
+		"modifier":
 			if parts.size() < 2:
-				TerminalSystem.push_output("[ERR] Usage: npc <npc_id>")
-				TerminalSystem.push_output("  IDs: wandering_merchant  old_miner  cave_hermit")
+				TerminalSystem.push_output("[ERR] Usage: modifier <modifier_id> [slot]")
+				TerminalSystem.push_output("  modifier sharp            — apply to weapon slot")
+				TerminalSystem.push_output("  modifier warding accessory")
+				TerminalSystem.push_output("  Modifiers: legendary godly demonic keen sharp heavy")
+				TerminalSystem.push_output("             swift lucky menacing violent warding quick")
+				TerminalSystem.push_output("             broken blunt")
 			else:
-				var npc_id_cmd: String = parts[1]
-				if is_instance_valid(player):
-					_spawn_npc(npc_id_cmd, player.global_position + Vector2(80.0, 0.0))
-					TerminalSystem.push_output("[OK] Spawned NPC: %s" % npc_id_cmd)
+				var mod_id   : String = parts[1]
+				var slot_id  : String = parts[2] if parts.size() >= 3 else "weapon"
+				if not ModifierCatalog.is_valid(mod_id):
+					TerminalSystem.push_output("[ERR] Unknown modifier: %s" % mod_id)
+				elif equipment_system == null:
+					TerminalSystem.push_output("[ERR] Equipment system not available")
+				elif not (slot_id in EquipmentSystem.SLOT_IDS):
+					TerminalSystem.push_output("[ERR] Unknown slot '%s' — use: %s" % [slot_id, " ".join(EquipmentSystem.SLOT_IDS)])
+				elif String(equipment_system.get_item(slot_id)) == "":
+					TerminalSystem.push_output("[ERR] Slot '%s' is empty — equip an item first" % slot_id)
+				elif equipment_system.has_method("apply_modifier") and equipment_system.apply_modifier(slot_id, mod_id):
+					var item_id_in_slot : String = equipment_system.get_item(slot_id)
+					TerminalSystem.push_output("[OK] Applied '%s' to %s in slot '%s'" % [mod_id, item_id_in_slot, slot_id])
 				else:
-					TerminalSystem.push_output("[ERR] Player not available")
-		"boss":
-			if parts.size() < 2:
-				TerminalSystem.push_output("[ERR] Usage: boss <boss_id>")
-				TerminalSystem.push_output("  IDs: giant_ant_queen")
-			else:
-				var boss_id_cmd: String = parts[1]
-				if is_instance_valid(player):
-					_spawn_boss(boss_id_cmd, player.global_position + Vector2(200.0, 0.0))
-					TerminalSystem.push_output("[OK] Spawned boss: %s" % boss_id_cmd)
-				else:
-					TerminalSystem.push_output("[ERR] Player not available")
+					TerminalSystem.push_output("[ERR] Could not apply modifier")
 		"kill":
 			var count_killed := enemies_node.get_child_count() if enemies_node != null else 0
 			if enemies_node != null:
@@ -890,16 +933,17 @@ func _on_terminal_command(cmd: String) -> void:
 		"clear":
 			TerminalSystem.clear_history()
 		"help":
-			TerminalSystem.push_output("  god              — toggle god mode (invincible + fly)")
-			TerminalSystem.push_output("  heal             — restore player to full HP")
-			TerminalSystem.push_output("  tp <1|2|3>       — teleport to band number")
-			TerminalSystem.push_output("  give <id> [n]    — add n of item to inventory")
-			TerminalSystem.push_output("  spawn <enemy_id> — spawn enemy near player")
-			TerminalSystem.push_output("  npc <npc_id>     — spawn friendly NPC near player")
-			TerminalSystem.push_output("  boss <boss_id>   — spawn boss near player")
-			TerminalSystem.push_output("  kill             — remove all active enemies & bosses")
-			TerminalSystem.push_output("  clear            — clear this console")
-			TerminalSystem.push_output("  help             — show this list")
+			TerminalSystem.push_output("  god                         — toggle god mode (invincible + fly)")
+			TerminalSystem.push_output("  heal                        — restore player to full HP")
+			TerminalSystem.push_output("  tp <1|2|3>                  — teleport to band number")
+			TerminalSystem.push_output("  give <id> [count] [mod]     — give item with optional modifier")
+			TerminalSystem.push_output("  respawn monster <enemy_id>  — spawn enemy near player")
+			TerminalSystem.push_output("  respawn npc <npc_id>        — spawn friendly NPC near player")
+			TerminalSystem.push_output("  respawn boss <id|1>         — reset + spawn boss (clears defeated)")
+			TerminalSystem.push_output("  modifier <mod> [slot]       — apply modifier to equipped item")
+			TerminalSystem.push_output("  kill                        — remove all active enemies & bosses")
+			TerminalSystem.push_output("  clear                       — clear this console")
+			TerminalSystem.push_output("  help                        — show this list")
 		_:
 			TerminalSystem.push_output("[ERR] Unknown command: %s   (type help for list)" % verb)
 	if hud != null:

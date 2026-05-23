@@ -3,6 +3,7 @@ class_name StatCalculator
 
 const EquipmentSystem  = preload("res://scripts/systems/EquipmentSystem.gd")
 const EquipmentCatalog = preload("res://scripts/catalogs/EquipmentCatalog.gd")
+const ModifierCatalog  = preload("res://scripts/catalogs/ModifierCatalog.gd")
 
 ## Derives all equipment-based stat bonuses from an EquipmentSystem snapshot.
 ##
@@ -38,6 +39,18 @@ static func compute(equipment_system) -> Dictionary:
 		for key in stats:
 			if totals.has(key):
 				totals[key] = totals[key] + stats[key]
+
+	# Apply weapon modifier's damage_mult — replaces the raw base damage with
+	# the modified value so the net change is (modified - base).
+	if equipment_system.has_method("get_slot_modifier"):
+		var weapon_id: String = equipment_system.get_item("weapon")
+		if weapon_id != "":
+			var modifier_id: String = equipment_system.get_slot_modifier("weapon")
+			if ModifierCatalog.is_valid(modifier_id):
+				var base_dmg := int(EquipmentCatalog.get_equippable(weapon_id).get("stats", {}).get("damage", 0))
+				var mod      := ModifierCatalog.get_modifier(modifier_id)
+				var mod_dmg  := roundi(float(base_dmg) * float(mod.get("damage_mult", 1.0)))
+				totals["damage"] = int(totals["damage"]) - base_dmg + mod_dmg
 
 	return totals
 

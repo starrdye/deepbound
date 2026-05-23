@@ -62,8 +62,11 @@ var bounce   := 0.4
 var friction := 0.8
 
 # ── Item state ───────────────────────────────────────────────────────────────
-var item_id : String  = ""
-var count   : int     = 0
+var item_id  : String = ""
+var count    : int    = 0
+## Optional modifier_id (empty string = no modifier).
+## Set by the spawner (e.g. Main._spawn_loot_drop) before or after setup().
+var modifier : String = ""
 
 # ── Physics state ────────────────────────────────────────────────────────────
 var velocity         := Vector2.ZERO
@@ -229,7 +232,11 @@ func _update_magnet(delta: float) -> bool:
 
 	# Collect when close enough
 	if distance <= COLLECT_RADIUS:
-		var remaining: int = inventory.add_item(item_id, count)
+		var remaining: int
+		if modifier != "" and inventory.has_method("add_stack"):
+			remaining = inventory.add_stack({"item": item_id, "count": count, "stack_cap": 1, "modifier": modifier})
+		else:
+			remaining = inventory.add_item(item_id, count)
 		if remaining <= 0:
 			queue_free()
 		else:
@@ -258,7 +265,11 @@ func try_collect(target_inventory = null) -> bool:
 		return false
 	if not destination.can_accept_item(item_id, count):
 		return false
-	var remaining: int = destination.add_item(item_id, count)
+	var remaining: int
+	if modifier != "" and destination.has_method("add_stack"):
+		remaining = destination.add_stack({"item": item_id, "count": count, "stack_cap": 1, "modifier": modifier})
+	else:
+		remaining = destination.add_item(item_id, count)
 	if remaining <= 0:
 		count = 0
 		queue_free()

@@ -11,6 +11,8 @@ const NPCCatalog      = preload("res://scripts/catalogs/NPCCatalog.gd")
 const VendorCatalog   = preload("res://scripts/catalogs/VendorCatalog.gd")
 const EquipmentCatalog = preload("res://scripts/catalogs/EquipmentCatalog.gd")
 const EquipmentSystem  = preload("res://scripts/systems/EquipmentSystem.gd")
+const ModifierCatalog  = preload("res://scripts/catalogs/ModifierCatalog.gd")
+const ModifierSystem   = preload("res://scripts/systems/ModifierSystem.gd")
 
 signal world_drop_requested(stack: Dictionary)
 signal hotbar_slot_selected(index: int)
@@ -71,6 +73,7 @@ var _terminal_line_edit: LineEdit = null
 
 ## Tooltip — layout is rebuilt once on hover change, not every draw frame
 var _hovered_item_id := ""
+var _hovered_stack: Dictionary = {}   # full stack dict (includes "modifier" key)
 var _tooltip_lines: Array[Dictionary] = []
 var _tooltip_panel_w := 0.0
 var _tooltip_panel_h := 0.0
@@ -182,6 +185,7 @@ func close_inventory() -> void:
 	_vendor_open = false
 	_vendor_shop_id = ""
 	_hovered_item_id = ""
+	_hovered_stack   = {}
 	_hovered_craft_id = ""
 	_hovered_vendor_idx = -1
 	_hovered_equip_slot = ""
@@ -194,7 +198,12 @@ func _flush_cursor_stack() -> void:
 		_clear_drag()
 		return
 	if player_inventory != null:
-		var remaining: int = player_inventory.add_item(String(cursor_stack.item), int(cursor_stack.count))
+		var remaining: int
+		var cs_mod := String(cursor_stack.get("modifier", ""))
+		if cs_mod != "" and player_inventory.has_method("add_stack"):
+			remaining = player_inventory.add_stack(cursor_stack.duplicate())
+		else:
+			remaining = player_inventory.add_item(String(cursor_stack.item), int(cursor_stack.count))
 		if remaining <= 0:
 			_clear_drag()
 			return
@@ -469,7 +478,8 @@ func _gui_input(event: InputEvent) -> void:
 		if not _is_empty_stack(cursor_stack):
 			queue_redraw()
 		else:
-			var new_hover := _item_id_at(event.position)
+			var new_hover_stack := _stack_at(event.position)
+			var new_hover := String(new_hover_stack.get("item", ""))
 			var new_craft_id := _craft_id_at(event.position)
 			var new_vendor_idx := _vendor_idx_at(event.position)
 			var new_equip_slot := ""
@@ -480,6 +490,7 @@ func _gui_input(event: InputEvent) -> void:
 			# Craft / vendor hover suppress item tooltip
 			if new_craft_id != "" or new_vendor_idx >= 0:
 				new_hover = ""
+				new_hover_stack = _empty_stack()
 			var needs_redraw := false
 			if new_equip_slot != _hovered_equip_slot:
 				_hovered_equip_slot = new_equip_slot
@@ -488,10 +499,11 @@ func _gui_input(event: InputEvent) -> void:
 				needs_redraw = true
 			if new_hover != _hovered_item_id:
 				_hovered_item_id = new_hover
+				_hovered_stack   = new_hover_stack
 				if new_hover != "":
 					var font := get_theme_default_font()
 					if font != null:
-						_rebuild_tooltip_layout(new_hover, font)
+						_rebuild_tooltip_layout(_hovered_stack, font)
 				needs_redraw = true
 			elif _hovered_item_id != "":
 				needs_redraw = true
@@ -618,7 +630,11 @@ func _get_hit_stack(hit: Dictionary) -> Dictionary:
 	if String(hit.get("panel", "")) == "equip":
 		if equipment_system == null:
 			return _empty_stack()
-		var item_id: String = equipment_system.get_item(String(hit.get("slot_id", "")))
+		var slot_id := String(hit.get("slot_id", ""))
+		if equipment_system.has_method("get_slot_stack"):
+			return equipment_system.get_slot_stack(slot_id)
+		# Fallback: old string API
+		var item_id: String = equipment_system.get_item(slot_id)
 		if item_id == "":
 			return _empty_stack()
 		return {"item": item_id, "count": 1, "stack_cap": 1}
@@ -632,7 +648,11 @@ func _take_hit_stack(hit: Dictionary) -> Dictionary:
 	if String(hit.get("panel", "")) == "equip":
 		if equipment_system == null:
 			return _empty_stack()
-		var item_id: String = equipment_system.unequip(String(hit.get("slot_id", "")))
+		var slot_id := String(hit.get("slot_id", ""))
+		if equipment_system.has_method("unequip_as_stack"):
+			return equipment_system.unequip_as_stack(slot_id)
+		# Fallback: old string API
+		var item_id: String = equipment_system.unequip(slot_id)
 		if item_id == "":
 			return _empty_stack()
 		return {"item": item_id, "count": 1, "stack_cap": 1}
@@ -651,7 +671,15 @@ func _place_hit_stack(hit: Dictionary, stack: Dictionary) -> Dictionary:
 		var count       := int(stack.get("count", 0))
 		if incoming_id == "" or count <= 0:
 			return _empty_stack()
-		# swap() returns incoming_id unchanged when the item doesn't belong here
+		if equipment_system.has_method("swap_stack"):
+			var displaced: Dictionary = equipment_system.swap_stack(slot_id, stack)
+			# swap_stack returns incoming_stack.duplicate() when rejected
+			if String(displaced.get("item", "")) == incoming_id:
+				return stack.duplicate()   # rejected — wrong slot type
+			if String(displaced.get("item", "")) == "":
+				return _empty_stack()
+			return displaced
+		# Fallback: old string API (drops modifier)
 		var displaced_id: String = equipment_system.swap(slot_id, incoming_id)
 		if displaced_id == incoming_id:
 			return stack.duplicate()  # rejected — return unchanged
@@ -783,31 +811,58 @@ func _is_empty_stack(stack: Dictionary) -> bool:
 
 ## ── Item tooltip ─────────────────────────────────────────────────────────────
 
-func _item_id_at(point: Vector2) -> String:
+## Return the full stack dict (including "modifier") for the slot under `point`.
+## Returns an empty stack when no slot is at that position.
+func _stack_at(point: Vector2) -> Dictionary:
 	var hotbar_idx := _hotbar_slot_at(point)
 	if hotbar_idx >= 0:
 		if player_inventory != null and player_inventory.has_method("get_hotbar_slot"):
-			return String(player_inventory.get_hotbar_slot(hotbar_idx).get("item", ""))
-		var slots: Array = hud_state.get("hotbar_slots", [])
-		return String(slots[hotbar_idx].get("item", "")) if hotbar_idx < slots.size() else ""
+			return player_inventory.get_hotbar_slot(hotbar_idx)
+		var hb_slots: Array = hud_state.get("hotbar_slots", [])
+		return hb_slots[hotbar_idx] if hotbar_idx < hb_slots.size() else _empty_stack()
 	if inventory_open and equipment_system != null:
 		var equip_hit := _equip_slot_at(point)
 		if not equip_hit.is_empty():
-			return equipment_system.get_item(String(equip_hit.get("slot_id", "")))
+			var slot_id := String(equip_hit.get("slot_id", ""))
+			if equipment_system.has_method("get_slot_stack"):
+				return equipment_system.get_slot_stack(slot_id)
+			# Fallback: old string API
+			var fallback_id: String = equipment_system.get_item(slot_id)
+			if fallback_id == "":
+				return _empty_stack()
+			return {"item": fallback_id, "count": 1, "stack_cap": 1}
 	if inventory_open:
 		var hit := _slot_at(point)
 		if not hit.is_empty():
-			return String(_get_hit_stack(hit).get("item", ""))
-	return ""
+			return _get_hit_stack(hit)
+	return _empty_stack()
 
-func _rebuild_tooltip_layout(item_id: String, font: Font) -> void:
-	var def := ItemCatalog.get_item(item_id)
-	var item_name := String(def.get("name", item_id.replace("_", " ").capitalize()))
-	var rarity := String(def.get("rarity", "common"))
+func _item_id_at(point: Vector2) -> String:
+	return String(_stack_at(point).get("item", ""))
+
+func _rebuild_tooltip_layout(stack: Dictionary, font: Font) -> void:
+	var item_id  := String(stack.get("item", ""))
+	var mod_id   := String(stack.get("modifier", ""))
+	var def      := ItemCatalog.get_item(item_id)
+	var rarity   := String(def.get("rarity", "common"))
 	var rarity_col := ItemCatalog.rarity_color(rarity)
+
+	# Display name: modifier prefix prepended when set
+	var item_name: String
+	if ModifierCatalog.is_valid(mod_id):
+		item_name = ModifierSystem.get_display_name(item_id, mod_id)
+	else:
+		item_name = String(def.get("name", item_id.replace("_", " ").capitalize()))
 
 	_tooltip_lines.clear()
 	_tooltip_lines.append({"text": item_name, "color": rarity_col, "size": TOOLTIP_NAME_SZ})
+
+	# Modifier sub-line: modifier name in its tier colour
+	if ModifierCatalog.is_valid(mod_id):
+		var mod_def := ModifierCatalog.get_modifier(mod_id)
+		var mod_col := ModifierCatalog.modifier_color(mod_id)
+		_tooltip_lines.append({"text": String(mod_def.get("name", "")), "color": mod_col, "size": TOOLTIP_BODY_SZ})
+
 	if rarity != "common":
 		_tooltip_lines.append({"text": rarity.capitalize(), "color": rarity_col.lerp(Color8(140, 140, 140), 0.5), "size": TOOLTIP_BODY_SZ})
 	var category := String(def.get("category", ""))
@@ -818,6 +873,12 @@ func _rebuild_tooltip_layout(item_id: String, font: Font) -> void:
 		_tooltip_lines.append({"text": "", "color": Color.WHITE, "size": 5})
 		for line in desc.split("\n"):
 			_tooltip_lines.append({"text": line, "color": Color8(210, 210, 210), "size": TOOLTIP_BODY_SZ})
+
+	# Modifier stat-delta lines (green = buff, red = nerf)
+	if ModifierCatalog.is_valid(mod_id):
+		_tooltip_lines.append({"text": "", "color": Color.WHITE, "size": 5})
+		for stat_line in ModifierSystem.build_tooltip_stat_lines(mod_id, item_id, TOOLTIP_BODY_SZ):
+			_tooltip_lines.append(stat_line)
 
 	var max_w := 0.0
 	_tooltip_panel_h = TOOLTIP_PAD * 2.0

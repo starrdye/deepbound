@@ -162,11 +162,17 @@ func _place_stack_in_array(target: Array[Dictionary], slot_index: int, incoming_
 		"count": int(incoming_stack.get("count", 0)),
 		"stack_cap": int(incoming_stack.get("stack_cap", stack_cap)),
 	}
-	var slot := target[slot_index]
+	# Preserve modifier — modifier-bearing stacks are unique and never merge.
+	var mod_id := String(incoming_stack.get("modifier", ""))
+	if mod_id != "":
+		incoming["modifier"] = mod_id
+	var slot     := target[slot_index]
+	var slot_mod := String(slot.get("modifier", ""))
 	if String(slot.item) == "":
 		target[slot_index] = incoming
 		return empty_stack()
-	if String(slot.item) == String(incoming.item):
+	# Merge only when same item AND both have the same modifier (or both have none).
+	if String(slot.item) == String(incoming.item) and slot_mod == mod_id:
 		var space := maxi(0, int(slot.stack_cap) - int(slot.count))
 		var moved := mini(space, int(incoming.count))
 		slot.count = int(slot.count) + moved
@@ -219,3 +225,61 @@ func _all_storage_slots() -> Array[Dictionary]:
 	combined.append_array(slots)
 	combined.append_array(hotbar)
 	return combined
+
+## Place a modifier-bearing stack into the first available empty slot.
+## For stacks without a modifier, delegates to add_item.
+## Returns the count that could not be placed (0 = fully placed).
+func add_stack(stack: Dictionary) -> int:
+	var mod_id   := String(stack.get("modifier", ""))
+	var item_str := String(stack.get("item", ""))
+	var cnt      := int(stack.get("count", 0))
+	if item_str == "" or cnt <= 0:
+		return cnt
+	if mod_id == "":
+		return add_item(item_str, cnt)
+	# Modifier stacks must occupy their own slot — never merge.
+	var cap := int(stack.get("stack_cap", stack_cap))
+	for i in range(hotbar.size()):
+		if String(hotbar[i].get("item", "")) == "":
+			hotbar[i] = {"item": item_str, "count": cnt, "stack_cap": cap, "modifier": mod_id}
+			return 0
+	for i in range(slots.size()):
+		if String(slots[i].get("item", "")) == "":
+			slots[i] = {"item": item_str, "count": cnt, "stack_cap": cap, "modifier": mod_id}
+			return 0
+	return cnt  # no empty slot found
+
+## Restore a slot directly from a saved stack dict (preserves modifier).
+## Used by SaveGameSystem when loading; bypasses stack-cap merging logic.
+func restore_slot(index: int, stack: Dictionary) -> void:
+	if not is_valid_slot(index):
+		return
+	if is_empty_stack(stack):
+		slots[index] = empty_stack()
+		return
+	var s := {
+		"item":      String(stack.get("item", "")),
+		"count":     int(stack.get("count", 0)),
+		"stack_cap": maxi(1, int(stack.get("stack_cap", stack_cap))),
+	}
+	var mod_id := String(stack.get("modifier", ""))
+	if mod_id != "":
+		s["modifier"] = mod_id
+	slots[index] = s
+
+## Restore a hotbar slot directly from a saved stack dict (preserves modifier).
+func restore_hotbar_slot(index: int, stack: Dictionary) -> void:
+	if not is_valid_hotbar_slot(index):
+		return
+	if is_empty_stack(stack):
+		hotbar[index] = empty_stack()
+		return
+	var s := {
+		"item":      String(stack.get("item", "")),
+		"count":     int(stack.get("count", 0)),
+		"stack_cap": maxi(1, int(stack.get("stack_cap", stack_cap))),
+	}
+	var mod_id := String(stack.get("modifier", ""))
+	if mod_id != "":
+		s["modifier"] = mod_id
+	hotbar[index] = s

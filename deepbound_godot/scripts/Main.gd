@@ -27,6 +27,7 @@ const BossUIScript          = preload("res://scenes/boss/BossUI.gd")
 const LootDropScene         = preload("res://scenes/LootDrop.tscn")
 const LootDropController    = preload("res://scripts/controllers/LootDropController.gd")
 const EnemyCatalog          = preload("res://scripts/catalogs/EnemyCatalog.gd")
+const ModifierCatalog       = preload("res://scripts/catalogs/ModifierCatalog.gd")
 
 const TEST_CHEST_OFFSET := Vector2(64, -16)
 const TEST_CHEST_OPEN_DISTANCE := 46.0
@@ -776,9 +777,15 @@ func _spawn_loot_drop(stack: Dictionary, pos: Vector2, pop_impulse := Vector2.ZE
 	var count   : int    = int(stack.get("count", 0))
 	if item_id == "" or count <= 0:
 		return
+	# Roll a modifier for equippable drops that don't already carry one.
+	var mod_id := String(stack.get("modifier", ""))
+	if mod_id == "" and EquipmentCatalog.is_equippable(item_id):
+		var slot_id := EquipmentCatalog.get_slot_for_item(item_id)
+		mod_id = ModifierCatalog.roll_for_item(slot_id)
 	var drop = LootDropScene.instantiate()
 	drops_node.add_child(drop)
 	drop.global_position = pos
+	drop.modifier = mod_id
 	drop.setup(item_id, count, player, player.inventory, world, pop_impulse)
 
 ## Hook called by SaveGameSystem.apply_game_state → main._refresh_encounters_after_load.

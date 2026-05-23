@@ -322,13 +322,21 @@ static func _apply_inventory_data(inventory, data: Dictionary) -> void:
 	var slots: Array = data.get("slots", [])
 	for index in range(mini(slots.size(), inventory.slots.size())):
 		var stack: Dictionary = Dictionary(slots[index])
-		inventory.set_slot(index, String(stack.get("item", "")), int(stack.get("count", 0)), int(stack.get("stack_cap", inventory.stack_cap)))
+		var s_mod := String(stack.get("modifier", ""))
+		if s_mod != "" and inventory.has_method("restore_slot"):
+			inventory.restore_slot(index, stack)
+		else:
+			inventory.set_slot(index, String(stack.get("item", "")), int(stack.get("count", 0)), int(stack.get("stack_cap", inventory.stack_cap)))
 	for index in range(inventory.hotbar.size()):
 		inventory.clear_hotbar_slot(index)
 	var hotbar: Array = data.get("hotbar", [])
 	for index in range(mini(hotbar.size(), inventory.hotbar.size())):
 		var stack: Dictionary = Dictionary(hotbar[index])
-		inventory.set_hotbar_slot(index, String(stack.get("item", "")), int(stack.get("count", 0)), int(stack.get("stack_cap", inventory.stack_cap)))
+		var s_mod := String(stack.get("modifier", ""))
+		if s_mod != "" and inventory.has_method("restore_hotbar_slot"):
+			inventory.restore_hotbar_slot(index, stack)
+		else:
+			inventory.set_hotbar_slot(index, String(stack.get("item", "")), int(stack.get("count", 0)), int(stack.get("stack_cap", inventory.stack_cap)))
 
 static func _stack_array_to_data(stacks: Array) -> Array[Dictionary]:
 	var results: Array[Dictionary] = []
@@ -339,11 +347,15 @@ static func _stack_array_to_data(stacks: Array) -> Array[Dictionary]:
 static func _stack_to_data(stack: Dictionary) -> Dictionary:
 	var item_id := String(stack.get("item", ""))
 	var count := int(stack.get("count", 0))
-	return {
+	var result := {
 		"item": item_id if count > 0 else "",
 		"count": maxi(0, count),
 		"stack_cap": maxi(1, int(stack.get("stack_cap", 99))),
 	}
+	var mod_id := String(stack.get("modifier", ""))
+	if mod_id != "" and count > 0:
+		result["modifier"] = mod_id
+	return result
 
 static func _inventory_data_from_data(data) -> Dictionary:
 	var source := Dictionary(data) if data is Dictionary else {}

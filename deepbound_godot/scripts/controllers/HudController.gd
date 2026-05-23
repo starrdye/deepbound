@@ -5,6 +5,7 @@ const TextureFactory = preload("res://scripts/factories/TextureFactory.gd")
 const HeartSystem = preload("res://scripts/systems/HeartSystem.gd")
 const DebugSystem = preload("res://scripts/systems/DebugSystem.gd")
 const TerminalSystem = preload("res://scripts/systems/TerminalSystem.gd")
+const ItemCatalog = preload("res://scripts/catalogs/ItemCatalog.gd")
 
 signal world_drop_requested(stack: Dictionary)
 signal hotbar_slot_selected(index: int)
@@ -166,6 +167,7 @@ func _draw() -> void:
 		_draw_inventory_panel(_container_panel_rect(), container_title, container_inventory, CONTAINER_COLS, "container")
 	if inventory_open:
 		_draw_cursor_stack()
+	_draw_tooltip()
 
 func _draw_hearts(origin: Vector2) -> void:
 	var states: Array = hud_state.get(
@@ -270,7 +272,7 @@ func _gui_input(event: InputEvent) -> void:
 			if hotbar_index >= 0:
 				hotbar_slot_selected.emit(hotbar_index)
 				accept_event()
-	elif event is InputEventMouseMotion and not _is_empty_stack(cursor_stack):
+	elif event is InputEventMouseMotion:
 		queue_redraw()
 
 func _handle_mouse_press(point: Vector2) -> bool:
@@ -499,3 +501,98 @@ func _empty_stack() -> Dictionary:
 
 func _is_empty_stack(stack: Dictionary) -> bool:
 	return String(stack.get("item", "")) == "" or int(stack.get("count", 0)) <= 0
+
+## ── Item tooltip ─────────────────────────────────────────────────────────────
+
+func _item_id_at(point: Vector2) -> String:
+	var hotbar_idx := _hotbar_slot_at(point)
+	if hotbar_idx >= 0:
+		if player_inventory != null and player_inventory.has_method("get_hotbar_slot"):
+			return String(player_inventory.get_hotbar_slot(hotbar_idx).get("item", ""))
+		var slots: Array = hud_state.get("hotbar_slots", [])
+		if hotbar_idx < slots.size():
+			return String(slots[hotbar_idx].get("item", ""))
+		return ""
+	if inventory_open:
+		var hit := _slot_at(point)
+		if not hit.is_empty():
+			return String(_get_hit_stack(hit).get("item", ""))
+	return ""
+
+func _draw_tooltip() -> void:
+	if TerminalSystem.is_open or not _is_empty_stack(cursor_stack):
+		return
+	var mouse_pos := get_local_mouse_position()
+	var item_id := _item_id_at(mouse_pos)
+	if item_id == "":
+		return
+
+	var def := ItemCatalog.get_item(item_id)
+	var item_name := String(def.get("name", item_id.replace("_", " ").capitalize()))
+	var rarity := String(def.get("rarity", "common"))
+	var category := String(def.get("category", ""))
+	var desc := String(def.get("desc", ""))
+
+	var font := get_theme_default_font()
+	if font == null:
+		return
+
+	const PAD := 10.0
+	const NAME_SZ := 14
+	const BODY_SZ := 11
+	const LINE_GAP := 3.0
+
+	# Build lines: [{text, color, size}]
+	var lines: Array[Dictionary] = []
+	lines.append({"text": item_name, "color": ItemCatalog.rarity_color(rarity), "size": NAME_SZ})
+	if rarity != "common":
+		var dim := ItemCatalog.rarity_color(rarity).lerp(Color8(140, 140, 140), 0.5)
+		lines.append({"text": rarity.capitalize(), "color": dim, "size": BODY_SZ})
+	if category != "":
+		lines.append({"text": category.replace("_", " ").capitalize(), "color": Color8(160, 160, 160), "size": BODY_SZ})
+	if desc != "":
+		lines.append({"text": "", "color": Color.WHITE, "size": 5})
+		for line in desc.split("\n"):
+			lines.append({"text": line, "color": Color8(210, 210, 210), "size": BODY_SZ})
+
+	# Measure required width
+	var max_w := 0.0
+	for ld in lines:
+		if String(ld.text) == "":
+			continue
+		var w := font.get_string_size(String(ld.text), HORIZONTAL_ALIGNMENT_LEFT, -1, int(ld.size)).x
+		if w > max_w:
+			max_w = w
+	var panel_w := max_w + PAD * 2.0
+	var panel_h := PAD * 2.0
+	for ld in lines:
+		panel_h += float(int(ld.size)) + LINE_GAP
+
+	# Position: right of cursor, above; clamped to viewport
+	var vsize := get_viewport_rect().size
+	var px := mouse_pos.x + 18.0
+	var py := mouse_pos.y - panel_h - 12.0
+	px = clampf(px, 4.0, vsize.x - panel_w - 4.0)
+	py = clampf(py, 4.0, vsize.y - panel_h - 4.0)
+
+	var panel_rect := Rect2(Vector2(px, py), Vector2(panel_w, panel_h))
+
+	# Shadow
+	draw_rect(Rect2(panel_rect.position + Vector2(3.0, 3.0), panel_rect.size), Color(0, 0, 0, 0.4), true)
+	# Background
+	draw_rect(panel_rect, Color(0.04, 0.04, 0.09, 0.96), true)
+	# Border (tinted by rarity)
+	var border := ItemCatalog.rarity_color(rarity)
+	border.a = 0.80
+	draw_rect(panel_rect, border, false, 1.5)
+
+	# Draw text lines
+	var cy := py + PAD
+	for ld in lines:
+		var sz := int(ld.size)
+		if String(ld.text) == "":
+			cy += float(sz) + LINE_GAP
+			continue
+		draw_string(font, Vector2(px + PAD, cy + sz), String(ld.text),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, sz, ld.color)
+		cy += float(sz) + LINE_GAP

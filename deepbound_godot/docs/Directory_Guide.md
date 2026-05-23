@@ -142,7 +142,23 @@ Stateless static helpers or `RefCounted` data objects. Each system owns one conc
 | `LightingSystem.gd` | Ray-cast light propagation from prop lights and glowglass tiles. |
 | `HeartSystem.gd` | HP tracking, damage application, and heart-display mapping (2 HP per heart). |
 | `CraftingSystem.gd` | Recipe definitions, craftable-status evaluation, station proximity detection. |
-| `SaveGameSystem.gd` | Serialises world state (modified chunks, inventory, position) to `user://saves/slot_1.json`. |
+| `SaveGameSystem.gd` | Serialises world state (modified chunks, inventory, position) to `user://saves/slot_1.json`. Schema v3 adds `defeated_bosses`. |
+| `BossEncounterSystem.gd` | Global static singleton for boss encounter state. Holds `defeated_bosses` dict, `encounter_active` flag, and emits `encounter_started / boss_hp_changed / boss_ended / boss_defeated` signals via a lazy singleton instance. No Autoload required — any script calls `BossEncounterSystem.get_instance()`. |
+
+### `scripts/boss/`
+
+Boss entity framework. All boss logic lives here; `Main.gd` calls `_spawn_boss(id, pos)` to instantiate.
+
+| File | Purpose |
+|------|---------|
+| `BossState.gd` | Abstract base class for FSM states. Concrete states implement `enter()`, `exit()`, `physics_update(delta)`. Access `boss` and `state_machine` properties injected by `BossStateMachine.setup()`. |
+| `BossStateMachine.gd` | Node-based FSM. Add as a child of `BossEntity`; add concrete `BossState` nodes as its children. Call `setup(boss, initial_state)` once; call `update(delta)` every physics frame. |
+| `states/BossStateIdle.gd` | Boss waits; transitions → Chase when player enters aggro radius. |
+| `states/BossStateChase.gd` | Boss pursues player; transitions → Attack (range), → Flee (player > max_chase_radius). |
+| `states/BossStateAttack.gd` | Boss deals damage on a cooldown; transitions → Chase when player escapes attack range. |
+| `states/BossStateFlee.gd` | Triggered by distance despawn or player death. Calls `BossEncounterSystem.end_encounter()`, moves boss away, despawns after 4 s. **No fixed arena.** |
+| `BossEntity.gd` | Base `CharacterBody2D` for all bosses. Builds FSM in `_ready()`. `setup(player, world)` starts the encounter. `take_damage(n)` drives HP and death. Concrete bosses override `_get_boss_id()`, `_get_boss_name()`, `_drop_loot()`, `_get_collider()`, and stat properties. |
+| `GiantAntQueen.gd` | First concrete boss (Band 2). HP 300, damage 12, speed 60 px/s, aggro 360 px, despawn 1500 px. Prototype vector art drawn in `_draw()`. Drops copper, stone, and resin. |
 
 ### `scripts/components/`
 
@@ -189,6 +205,7 @@ Thin node graphs. All logic lives in `scripts/controllers/`. The scene just decl
 | `Hud.tscn` | CanvasLayer UI: hearts, hotbar, inventory grid, equipment panel. |
 | `MainMenu.tscn` | Full-screen menu: new game, continue, settings buttons. |
 | `PrefabDesigner.tscn` | Template editor overlay: canvas, layer toggles, tile palette, load/save buttons. |
+| `boss/BossUI.gd` | `CanvasLayer` (layer 30) that shows a top-centre boss health bar. Connects to `BossEncounterSystem` signals automatically in `_ready()`. Instantiated by `Main._setup_boss_ui()` — no `.tscn` required. |
 
 ---
 

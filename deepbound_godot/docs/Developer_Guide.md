@@ -640,18 +640,114 @@ TerminalSystem.push_output("  mycommand <arg> — description of what it does")
 
 **File:** `scripts/systems/SaveGameSystem.gd`
 
-Saves to `user://saves/slot_1.json` at schema version `2`.
+Saves to `user://saves/slot_1.json` at schema version `3`.
 
-**Persisted:** world seed, player position + HP, inventory/hotbar, selected hotbar index, tile/background overrides (modified chunks), damage map, chest contents, world drops, beacons, flares, structure metadata.
+**Persisted:** world seed, player position + HP, inventory/hotbar, selected hotbar index, tile/background overrides (modified chunks), damage map, chest contents, world drops, beacons, flares, structure metadata, **defeated bosses dict**.
 
-**Not persisted:** equipment slots (planned for schema v3), enemy positions.
+**Not persisted:** equipment slots, enemy positions.
 
-**To save / load from Main:**
+**Schema history:**
+
+| Version | Added |
+|---------|-------|
+| 1 | Initial save (seed, player, inventory) |
+| 2 | Generated chunk freezing, frozen structures |
+| 3 | `defeated_bosses` dictionary |
+
+Older saves are normalised up automatically. v1/v2 files gain an empty `defeated_bosses: {}` on first load.
+
+---
+
+### 4.13 Boss Encounters
+
+**Files:** `scripts/systems/BossEncounterSystem.gd`, `scripts/boss/`
+
+#### Architecture at a glance
+
+```
+Main._spawn_boss("giant_ant_queen", pos)
+    └─ creates GiantAntQueen node
+       └─ GiantAntQueen._ready()       → builds FSM (Idle/Chase/Attack/Flee nodes)
+       └─ GiantAntQueen.setup(p, w)    → BossEncounterSystem.start_encounter(...)
+                                         ↳ BossEncounterSystem.encounter_started emitted
+                                           ↳ BossUI shows health bar
+```
+
+#### BossEncounterSystem (static singleton)
+
+`BossEncounterSystem` is a `RefCounted` subclass with only **static** vars and methods — no Autoload required. Call `BossEncounterSystem.get_instance()` to get the signal-emitting object.
 
 ```gdscript
-SaveGameSystem.save(world, player)
-SaveGameSystem.load_into(world, player)
+# Any script:
+BossEncounterSystem.start_encounter("giant_ant_queen", "Giant Ant Queen", 300)
+BossEncounterSystem.report_hp(250, 300)
+BossEncounterSystem.end_encounter()
+BossEncounterSystem.defeat("giant_ant_queen")
+BossEncounterSystem.is_defeated("giant_ant_queen")   # → true
 ```
+
+**Signals** (on the instance):
+
+| Signal | Args | When |
+|--------|------|------|
+| `encounter_started` | `boss_id, boss_name, max_hp` | Boss becomes active |
+| `boss_hp_changed` | `current, maximum` | Every `take_damage()` call |
+| `boss_ended` | — | Boss dies **or** flees |
+| `boss_defeated` | `boss_id` | Boss dies only |
+
+#### Node-based FSM
+
+```
+BossEntity (CharacterBody2D)
+└── StateMachine (BossStateMachine)
+    ├── Idle    (BossStateIdle)   ← default
+    ├── Chase   (BossStateChase)
+    ├── Attack  (BossStateAttack)
+    └���─ Flee    (BossStateFlee)   ← despawn path
+```
+
+`BossStateMachine.setup(boss, initial_state_name)` injects `boss` and `state_machine` references into every child `BossState`, then enters the initial state. Each `BossState` calls `transition_to("StateName")` to request a state change.
+
+#### Terraria-style dynamic despawn
+
+**There is no static arena or Area2D.** The world is infinite. Instead, `BossStateChase` checks `boss.global_position.distance_to(player.global_position)` each physics frame. If the distance exceeds `boss.max_chase_radius` (default **1500 px**), the FSM transitions to `Flee`. `BossStateFlee` calls `BossEncounterSystem.end_encounter()` immediately, moves the boss away, and calls `queue_free()` after 4 seconds. The boss is **not** marked defeated on a flee.
+
+#### Adding a new boss
+
+1. Create `scripts/boss/MyBoss.gd` that `extends "res://scripts/boss/BossEntity.gd"`.
+2. Override `_get_boss_id()` → return a unique snake_case string.
+3. Override `_get_boss_name()` → return the display name.
+4. In `_ready()`, set stat properties (`max_health`, `attack_damage`, `move_speed` etc.), then call `super._ready()` to build the FSM.
+5. Override `_get_collider()` to match your sprite bounding box.
+6. Override `_drop_loot()` to emit the `loot_dropped` signal with your reward stacks.
+7. Override `_draw()` for sprite/art.
+8. Register in `Main._spawn_boss()` match block.
+
+```gdscript
+# scripts/boss/MyBoss.gd
+extends "res://scripts/boss/BossEntity.gd"
+
+func _get_boss_id()   -> String: return "my_boss"
+func _get_boss_name() -> String: return "My Boss"
+
+func _ready() -> void:
+    max_health    = 500
+    health        = 500
+    attack_damage = 20
+    move_speed    = 90.0
+    super._ready()
+
+func _drop_loot() -> void:
+    emit_signal("loot_dropped", global_position, [
+        {"item": "crystal_shard", "count": 5},
+    ])
+
+signal loot_dropped(pos: Vector2, drops: Array)
+```
+
+#### BossUI
+
+`BossUI.gd` is a `CanvasLayer` (layer 30) attached programmatically by `Main._setup_boss_ui()`. It connects to `BossEncounterSystem` signals in `_ready()` and draws the health bar using the `Control._draw()` pattern. No `.tscn` file is required.
 
 ---
 
@@ -1015,6 +1111,18 @@ A `}` inside a `const ITEMS := { ... }` dict closes it early. All entries after 
 │                                                                  │
 │  npc.interactable.interacted ───────► _on_npc_interacted         │
 │    → hud.open_dialogue                                           │
+│                                                                  │
+│  boss.setup(player, world)                                       │
+│    → BossEncounterSystem.start_encounter(id, name, hp)           │
+│    → BossEncounterSystem.encounter_started signal                │
+│    → BossUI shows health bar                                     │
+│  boss.take_damage(n)                                             │
+│    → BossEncounterSystem.report_hp(current, max)                 │
+│    → BossUI updates fill                                         │
+│  boss._on_death()                                                │
+│    → BossEncounterSystem.end_encounter()  → BossUI hides         │
+│    → BossEncounterSystem.defeat(id)       → defeated_bosses set  │
+│    → SaveGameSystem persists defeated_bosses in schema v3        │
 └─────────────────────────────────────────────────────────────────┘
                            │
               ┌────────────┼─────────────┐
@@ -1053,14 +1161,16 @@ Player presses T
 
 ## 9. Roadmap
 
-The items below are planned but not yet implemented. See `Architecture.md §13` for full rationale.
-
-| # | Task | Priority |
-|---|------|---------|
-| 13.1 | Migrate catalog data to Godot `Resource` `.tres` files | High |
-| 13.2 | Upgrade `InteractableComponent` to `Area2D` (after CharacterBody2D migration) | Medium |
-| 13.3 | Add `EventBus` autoload for cross-system signals (player death, quests) | Medium |
-| 13.4 | Refactor HUD to scene-based `SlotUI.tscn` panels | Low |
+| # | Task | Status | Priority |
+|---|------|--------|---------|
+| — | Boss Encounters framework (BossEncounterSystem, FSM, BossEntity, GiantAntQueen, BossUI) | ✅ Done | — |
+| 13.1 | Migrate catalog data to Godot `Resource` `.tres` files | Planned | High |
+| 13.2 | Upgrade `InteractableComponent` to `Area2D` (after CharacterBody2D migration) | Planned | Medium |
+| 13.3 | Add `EventBus` autoload for cross-system signals (player death, quests) | Planned | Medium |
+| 13.4 | Refactor HUD to scene-based `SlotUI.tscn` panels | Planned | Low |
+| — | Additional boss encounters (Band 3 Pyramid Pharaoh, Band 4 Drow Spider Queen) | Planned | Medium |
+| — | Boss summon triggers in-world (approach zone, item use) | Planned | Medium |
+| — | Persist equipment slots to save (schema v4) | Planned | High |
 | 13.5 | Persist `EquipmentSystem` in save file (schema v3) | High |
 | — | Equipment save/load: `EquipmentSystem.serialize()` + `deserialize()` + bump schema to v3 | High |
 

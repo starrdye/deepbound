@@ -17,10 +17,13 @@ const DebugSystem       = preload("res://scripts/systems/DebugSystem.gd")
 const TerminalSystem    = preload("res://scripts/systems/TerminalSystem.gd")
 const NpcController     = preload("res://scripts/controllers/NpcController.gd")
 const NPCCatalog        = preload("res://scripts/catalogs/NPCCatalog.gd")
-const CraftingSystem    = preload("res://scripts/systems/CraftingSystem.gd")
-const EquipmentSystem  = preload("res://scripts/systems/EquipmentSystem.gd")
-const StatCalculator   = preload("res://scripts/systems/StatCalculator.gd")
-const EquipmentCatalog = preload("res://scripts/catalogs/EquipmentCatalog.gd")
+const CraftingSystem        = preload("res://scripts/systems/CraftingSystem.gd")
+const EquipmentSystem       = preload("res://scripts/systems/EquipmentSystem.gd")
+const StatCalculator        = preload("res://scripts/systems/StatCalculator.gd")
+const EquipmentCatalog      = preload("res://scripts/catalogs/EquipmentCatalog.gd")
+const BossEncounterSystem   = preload("res://scripts/systems/BossEncounterSystem.gd")
+const GiantAntQueenScript   = preload("res://scripts/boss/GiantAntQueen.gd")
+const BossUIScript          = preload("res://scenes/boss/BossUI.gd")
 
 const TEST_CHEST_OFFSET := Vector2(64, -16)
 const TEST_CHEST_OPEN_DISTANCE := 46.0
@@ -55,7 +58,9 @@ const TRANSIENT_INPUT_ACTIONS := [
 @onready var drops_node: Node2D  = get_node_or_null("Drops")
 @onready var hud = $HudLayer/Hud
 @onready var enemies_node: Node2D = $Enemies
-var npcs_node: Node2D = null
+var npcs_node: Node2D  = null
+var bosses_node: Node2D = null
+var boss_ui: CanvasLayer = null
 
 var equipment_system: EquipmentSystem = null
 var current_encounter_band := ""
@@ -101,6 +106,10 @@ func _ready() -> void:
 	npcs_node = Node2D.new()
 	npcs_node.name = "NPCs"
 	add_child(npcs_node)
+	bosses_node = Node2D.new()
+	bosses_node.name = "Bosses"
+	add_child(bosses_node)
+	_setup_boss_ui()
 	if hud.has_signal("world_drop_requested") and not hud.world_drop_requested.is_connected(_spawn_world_drop):
 		hud.world_drop_requested.connect(_spawn_world_drop)
 	if hud.has_signal("hotbar_slot_selected") and not hud.hotbar_slot_selected.is_connected(_select_hotbar_index):
@@ -714,6 +723,48 @@ func _set_player_drag_lock(locked: bool) -> void:
 	if is_instance_valid(player) and player.has_method("set_controls_locked"):
 		player.set_controls_locked(locked)
 
+## ── Boss encounter helpers ────────────────────────────────────────────────────
+
+func _setup_boss_ui() -> void:
+	boss_ui = BossUIScript.new()
+	boss_ui.name = "BossUI"
+	add_child(boss_ui)
+
+func _spawn_boss(boss_id: String, pos: Vector2) -> void:
+	if bosses_node == null or not is_instance_valid(player):
+		return
+	if BossEncounterSystem.is_defeated(boss_id):
+		TerminalSystem.push_output("[ERR] Boss '%s' has already been defeated." % boss_id)
+		return
+	var boss_node: Node2D = null
+	match boss_id:
+		"giant_ant_queen":
+			boss_node = GiantAntQueenScript.new()
+		_:
+			TerminalSystem.push_output("[ERR] Unknown boss id: %s" % boss_id)
+			return
+	boss_node.name = boss_id
+	bosses_node.add_child(boss_node)
+	boss_node.global_position = pos
+	# Connect loot drop signal so world drops appear.
+	if boss_node.has_signal("loot_dropped"):
+		boss_node.loot_dropped.connect(_on_boss_loot_dropped)
+	boss_node.setup(player, world)
+
+func _on_boss_loot_dropped(pos: Vector2, drops: Array) -> void:
+	for i in range(drops.size()):
+		var stack: Dictionary = drops[i]
+		var offset := Vector2(float((i % 3) - 1) * 6.0, -8.0 - float(i / 3) * 4.0)
+		var toss   := Vector2(float((i % 3) - 1) * 40.0, -55.0)
+		_spawn_world_drop_at(stack, pos + offset, true, toss)
+
+## Hook called by SaveGameSystem.apply_game_state → main._refresh_encounters_after_load.
+## Clears any live boss nodes so they are not duplicated on load.
+func _clear_boss_nodes() -> void:
+	if bosses_node != null:
+		for child in bosses_node.get_children():
+			child.queue_free()
+
 ## ── Terminal console command handler ─────────────────────────────────────────
 
 func _on_terminal_command(cmd: String) -> void:
@@ -785,12 +836,27 @@ func _on_terminal_command(cmd: String) -> void:
 					TerminalSystem.push_output("[OK] Spawned NPC: %s" % npc_id_cmd)
 				else:
 					TerminalSystem.push_output("[ERR] Player not available")
+		"boss":
+			if parts.size() < 2:
+				TerminalSystem.push_output("[ERR] Usage: boss <boss_id>")
+				TerminalSystem.push_output("  IDs: giant_ant_queen")
+			else:
+				var boss_id_cmd: String = parts[1]
+				if is_instance_valid(player):
+					_spawn_boss(boss_id_cmd, player.global_position + Vector2(200.0, 0.0))
+					TerminalSystem.push_output("[OK] Spawned boss: %s" % boss_id_cmd)
+				else:
+					TerminalSystem.push_output("[ERR] Player not available")
 		"kill":
 			var count_killed := enemies_node.get_child_count() if enemies_node != null else 0
 			if enemies_node != null:
 				for child in enemies_node.get_children():
 					child.queue_free()
-			TerminalSystem.push_output("[OK] Removed %d enemies" % count_killed)
+			if bosses_node != null:
+				for child in bosses_node.get_children():
+					child.queue_free()
+				BossEncounterSystem.end_encounter()
+			TerminalSystem.push_output("[OK] Removed %d enemies and all bosses" % count_killed)
 		"clear":
 			TerminalSystem.clear_history()
 		"help":
@@ -800,7 +866,8 @@ func _on_terminal_command(cmd: String) -> void:
 			TerminalSystem.push_output("  give <id> [n]    — add n of item to inventory")
 			TerminalSystem.push_output("  spawn <enemy_id> — spawn enemy near player")
 			TerminalSystem.push_output("  npc <npc_id>     — spawn friendly NPC near player")
-			TerminalSystem.push_output("  kill             — remove all active enemies")
+			TerminalSystem.push_output("  boss <boss_id>   — spawn boss near player")
+			TerminalSystem.push_output("  kill             — remove all active enemies & bosses")
 			TerminalSystem.push_output("  clear            — clear this console")
 			TerminalSystem.push_output("  help             — show this list")
 		_:
@@ -830,6 +897,8 @@ func load_game() -> Dictionary:
 func _refresh_encounters_after_load() -> void:
 	for child in enemies_node.get_children():
 		child.queue_free()
+	_clear_boss_nodes()
+	BossEncounterSystem.end_encounter()
 	current_encounter_band = ""
 	spawned_structure_encounters.clear()
 	last_structure_spawn_check_tile = Vector2i(999999, 999999)

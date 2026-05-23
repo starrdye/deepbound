@@ -140,7 +140,8 @@ The terminal shows the last 8 lines of output above the input field. Lines are c
 | `give <item_id> [count]` | Add items directly to inventory (e.g. `give crystal_helm`) |
 | `spawn <enemy_id>` | Spawn an enemy near the player (e.g. `spawn goblin_grunt`) |
 | `npc <npc_id>` | Spawn a friendly NPC near the player (e.g. `npc wandering_merchant`) |
-| `kill` | Remove all active enemies from the world |
+| `boss <boss_id>` | Spawn a boss near the player (e.g. `boss giant_ant_queen`) |
+| `kill` | Remove all active enemies and bosses from the world |
 | `clear` | Clear the output history |
 | `help` | Print the full command list |
 
@@ -332,3 +333,43 @@ The current gameplay systems are covered by these Godot test scripts:
 - `tests/dwarf_fortress_tests.gd`: Band 2 dwarf fortress assets, template validation, spawning, lights, containers, chunk overlay stability
 - `tests/dwarf_settlement_tests.gd`: Band 2 dwarf settlement template validation, generated placement, lights, containers, prop drawing
 - `tests/movement_perf_tests.gd`: cached terrain redraw, camera movement, chunk warm-ahead, template-heavy fall regressions
+- `tests/boss_tests.gd`: BossEncounterSystem signals/defeated flags, BossStateMachine FSM transitions, BossEntity damage/death/flee, SaveGameSystem v3 schema round-trip
+
+---
+
+## Boss Encounters
+
+Boss fights are opt-in encounters — they do not start automatically in the current prototype. Use the debug terminal (`boss giant_ant_queen`) or approach a trigger zone to start a fight.
+
+### Health Bar HUD
+
+When a boss fight starts a health bar appears at the top-centre of the screen showing:
+
+- Boss name (above bar)
+- Coloured fill — red (>50 %), orange (25–50 %), bright-red (<25 %)
+- Current / maximum HP text inside the bar
+
+The bar disappears automatically when the boss dies or flees.
+
+### Terraria-Style Dynamic Despawn
+
+There is no fixed arena or bounding box. If the player moves more than **1500 px** away from the boss, the boss enters its **Flee** state and despawns after 4 seconds. The health bar is hidden when this happens. The boss is **not** marked as defeated on a flee — it can be re-encountered.
+
+### Defeat and Persistence
+
+On death the boss emits loot drops and is recorded in `BossEncounterSystem.defeated_bosses`. Defeated bosses are saved to `slot_1.json` (schema v3) and will not respawn after a reload.
+
+### Current Bosses
+
+| Boss ID | Band | HP | Damage | Notes |
+|---------|------|----|--------|-------|
+| `giant_ant_queen` | 2 — Colossal Ant Chambers | 300 | 12 | Prototype art; drops copper, stone, resin |
+
+### Boss FSM States
+
+| State | Trigger to enter | Trigger to leave |
+|-------|-----------------|-----------------|
+| **Idle** | Start / return from attack | Player enters aggro radius (360 px) |
+| **Chase** | Player enters aggro radius | Attack range reached OR despawn radius exceeded |
+| **Attack** | Within attack range (44 px) | Player moves away; fires every 1.2 s |
+| **Flee** | Player > 1500 px away OR player dead | Despawns after 4 s |

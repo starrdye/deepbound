@@ -1,12 +1,13 @@
 extends RefCounted
 class_name SaveGameSystem
 
-const ChunkStore = preload("res://scripts/systems/ChunkStore.gd")
-const MiningSystem = preload("res://scripts/systems/MiningSystem.gd")
-const ChestController = preload("res://scripts/controllers/ChestController.gd")
-const DroppedItemController = preload("res://scripts/controllers/DroppedItemController.gd")
+const ChunkStore             = preload("res://scripts/systems/ChunkStore.gd")
+const MiningSystem           = preload("res://scripts/systems/MiningSystem.gd")
+const ChestController        = preload("res://scripts/controllers/ChestController.gd")
+const DroppedItemController  = preload("res://scripts/controllers/DroppedItemController.gd")
+const BossEncounterSystem    = preload("res://scripts/systems/BossEncounterSystem.gd")
 
-const SCHEMA_VERSION := 2
+const SCHEMA_VERSION := 3
 const SAVE_PATH := "user://saves/slot_1.json"
 const PENDING_SAVE_META_KEY := "deepbound_pending_save_data"
 
@@ -58,6 +59,7 @@ static func snapshot_game_state(main) -> Dictionary:
 		"drops": _snapshot_drops(main.get("drops_node")),
 		"beacons": _vec2_array_to_data(world.beacons if world != null and world.get("beacons") != null else []),
 		"flares": _flares_to_data(world.flares if world != null and world.get("flares") != null else []),
+		"defeated_bosses": BossEncounterSystem.defeated_bosses.duplicate(),
 	})
 
 static func apply_game_state(main, data: Dictionary) -> Dictionary:
@@ -114,6 +116,11 @@ static func apply_game_state(main, data: Dictionary) -> Dictionary:
 		world.refresh_after_loaded_state()
 	elif world.has_method("refresh_visible_chunk_window"):
 		world.refresh_visible_chunk_window(true)
+
+	# Restore defeated boss flags.
+	var saved_bosses = normalized.get("defeated_bosses", {})
+	if saved_bosses is Dictionary:
+		BossEncounterSystem.defeated_bosses = Dictionary(saved_bosses)
 
 	if main.has_method("_refresh_encounters_after_load"):
 		main._refresh_encounters_after_load()
@@ -172,6 +179,7 @@ static func normalize_save_data(data: Dictionary) -> Dictionary:
 		"drops": _drops_from_data(data.get("drops", [])),
 		"beacons": _vec2_array_from_data(data.get("beacons", [])).map(func(v): return _vec2_to_data(v)),
 		"flares": _flares_to_data(_flares_from_data(data.get("flares", []))),
+		"defeated_bosses": _defeated_bosses_from_data(data.get("defeated_bosses", {})),
 	}
 
 static func _snapshot_world(world) -> Dictionary:
@@ -755,7 +763,17 @@ static func _ensure_parent_dir(path: String) -> void:
 static func _validate_save_data(data: Dictionary) -> String:
 	if int(data.get("schema_version", -1)) != SCHEMA_VERSION:
 		return "Unsupported save schema version."
-	for key in ["world", "player", "inventory", "containers", "drops", "beacons", "flares"]:
+	for key in ["world", "player", "inventory", "containers", "drops", "beacons", "flares", "defeated_bosses"]:
 		if not data.has(key):
 			return "Save file is missing '%s'." % key
 	return ""
+
+## Normalise the defeated_bosses dict from save data (keys must be strings,
+## values must be bool true).
+static func _defeated_bosses_from_data(data) -> Dictionary:
+	var result: Dictionary = {}
+	if not (data is Dictionary):
+		return result
+	for key in Dictionary(data).keys():
+		result[String(key)] = true
+	return result

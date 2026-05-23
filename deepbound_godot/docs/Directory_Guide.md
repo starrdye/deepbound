@@ -13,7 +13,7 @@ deepbound_godot/
 ├── docs/           Design and architecture documentation
 ├── scenes/         Godot scene files (.tscn) that wire scripts to nodes
 ├── scripts/        All GDScript logic (no scene-specific coupling)
-├── tests/          Headless GDScript test suites run via `godot4 --headless`
+├── tests/          Headless GDScript test suites run via `godot --headless`
 ├── tools/          Python scripts for asset generation and import helpers
 └── project.godot   Godot 4.x project manifest
 ```
@@ -109,32 +109,48 @@ Read-only static data tables. Each catalog is a single `class_name`d file with `
 
 | File | Purpose |
 |------|---------|
+| `ItemCatalog.gd` | Every item in the game: display name, description, rarity, and category. Used by HUD tooltip and drag-drop. All items (including equippables) must be listed here. |
+| `EquipmentCatalog.gd` | Every equippable item: slot ID, stat deltas (`damage`, `defense`, `health_max`, `speed`, `drill_cool`), and `light_radius_tiles` for utility items. Must parallel `ItemCatalog` entries. |
 | `TileCatalog.gd` | Every foreground tile: hardness, breakable, solid, occlusion, color, drops. Band assignment. |
 | `BackgroundCatalog.gd` | Every background wall: same schema as TileCatalog. |
 | `BandCatalog.gd` | Five underground bands keyed by `id`. Maps tileY ranges to band IDs via `resolve_band_id(y)`. |
 | `EnemyCatalog.gd` | Every enemy: band, health, damage, unlock item. |
-| `VillageCatalog.gd` | Village/settlement metadata: required tiles, props, backgrounds, building order, generation rules. Also holds symbol-to-tile maps used by layout grids. Settlement-specific ID lists (`DROW_SETTLEMENT_PROP_IDS`, etc.) live here. |
+| `NPCCatalog.gd` | Friendly NPCs: name, sprite_key, dialogue node array, shop ID, interact_radius. |
+| `DialogueCatalog.gd` | Dialogue nodes: text, speaker, optional `event` string ("open_shop" etc.). |
+| `VendorCatalog.gd` | Shop stock (item, price) and `get_sell_price(item_id)` for player sell-back. |
+| `VillageCatalog.gd` | Village/settlement metadata: required tiles, props, backgrounds, building order, generation rules. Symbol-to-tile maps. Settlement-specific ID lists. |
 | `PlaceableCatalog.gd` | Items that can be placed back into the world (tiles, containers). |
 | `EconomyModel.gd` | Item pricing and shop value formulas. |
 
 ### `scripts/systems/`
 
-Stateless static helpers or autoloaded singletons. Each system owns one concern.
+Stateless static helpers or `RefCounted` data objects. Each system owns one concern and has no scene-tree coupling.
 
 | File | Purpose |
 |------|---------|
+| `InventorySystem.gd` | Grid-based inventory with stacking, hotbar, and drag-and-drop logic. `RefCounted`. |
+| `EquipmentSystem.gd` | Manages the 7 equipment slots (`weapon / head / body / legs / feet / accessory / utility`). Validates items against `EquipmentCatalog`. Emits `equipment_changed`. `RefCounted`. |
+| `StatCalculator.gd` | Stateless. `compute(equipment_system)` sums all stat deltas across equipped items. `get_utility_light_radius(equipment_system)` reads torch/lantern radius for World lighting. |
 | `WorldGenerator.gd` | Noise-based terrain generation. `generate_tile_id(seed, tile)` and `generate_background_id(seed, tile)` are the entry points. Also dispatches to `StructureGenerator` for structure overlays. |
 | `StructureGenerator.gd` | Resolves which templates overlap a given chunk, applies tile/background/prop/spawn overlays. Exposes `get_structure_spawns_near`, `get_structure_lights_near`, `get_structure_containers_near`. |
-| `PrefabTemplateRegistry.gd` | Loads, caches, and validates template JSONs from `res://data/templates/` (builtins) and `user://templates/` (user saves). `load_templates()` discovers all files in those directories automatically — **adding a new `.json` to `data/templates/` is sufficient for worldgen to pick it up.** `validate_template()` enforces the schema. |
-| `PrefabTemplateImporter.gd` | One-shot helpers that programmatically construct a template dict and save it via `PrefabTemplateRegistry.save_template()`. Used to seed the goblin template on first run. |
+| `PrefabTemplateRegistry.gd` | Loads, caches, and validates template JSONs from `res://data/templates/` (builtins) and `user://templates/` (user saves). Adding a new `.json` to `data/templates/` is sufficient for worldgen to pick it up automatically. |
+| `PrefabTemplateImporter.gd` | One-shot helpers that programmatically construct a template dict and save it via `PrefabTemplateRegistry.save_template()`. |
 | `ChunkStore.gd` | Memoised per-seed tile lookup. Caches generated + overlaid tile data so chunks are deterministic regardless of generation order. |
 | `CollisionSystem.gd` | AABB sweep vs tile grid. Used by `PlayerController` and `EnemyController`. |
 | `SpawnSystem.gd` | Finds valid floor positions near a point for enemy placement. |
 | `MiningSystem.gd` | Tracks per-tile damage, emits break-stage changes, handles drill vs pick multipliers. |
 | `LightingSystem.gd` | Ray-cast light propagation from prop lights and glowglass tiles. |
-| `InventorySystem.gd` | Grid-based inventory with stacking, hotbar, and drag-and-drop logic. |
 | `HeartSystem.gd` | HP tracking, damage application, and heart-display mapping (2 HP per heart). |
-| `SaveGameSystem.gd` | Serialises world state (modified chunks, inventory, position) to `user://save.json`. |
+| `CraftingSystem.gd` | Recipe definitions, craftable-status evaluation, station proximity detection. |
+| `SaveGameSystem.gd` | Serialises world state (modified chunks, inventory, position) to `user://saves/slot_1.json`. |
+
+### `scripts/components/`
+
+Reusable composition components. Each component is a `Node2D` child you drop onto any host entity — no base-class change required.
+
+| File | Purpose |
+|------|---------|
+| `InteractableComponent.gd` | Adds proximity detection, a floating hint label, and `interacted` / `proximity_changed` signals to any host entity. Currently used by `NpcController`. Designed to extend to chests, doors, levers, and item pedestals. |
 
 ### `scripts/controllers/`
 
@@ -142,14 +158,15 @@ Scene-bound logic attached to Godot nodes. Each controller corresponds to exactl
 
 | File | Scene | Purpose |
 |------|-------|---------|
-| `PlayerController.gd` | `Player.tscn` | Input, movement, gravity, jump, mining drill, inventory pickup. |
+| `PlayerController.gd` | `Player.tscn` | Input, movement, gravity, jump, mining drill, inventory pickup. Exposes equipment stat hooks: `set_equipment_speed_bonus`, `set_equipment_defense_bonus`, `set_equipment_health_delta`. |
 | `EnemyController.gd` | `Enemy.tscn` | AI patrol/chase, gravity, knockback, sprite frame selection. |
 | `CameraController.gd` | `Main.tscn` | Dead-zone follow with catchup speed; clamps to world bounds. |
-| `HudController.gd` | `Hud.tscn` | Renders hearts, hotbar, open inventory panel, drag-and-drop overlays. |
+| `HudController.gd` | `Hud.tscn` | Immediate-mode `_draw()` rendering for hearts, hotbar, inventory/container panels, **equipment panel** (7-slot column), crafting panel, dialogue panel, and vendor panel. Communicates outward via signals only. |
+| `NpcController.gd` | spawned in world | Friendly NPC: drawn body and name label. Owns an `InteractableComponent` child that handles proximity and the `interacted` signal. |
 | `ChestController.gd` | spawned in world | Chest open/close animation, loot-to-inventory transfer UI. |
 | `DroppedItemController.gd` | spawned in world | Physics drop arc, pickup delay timer, magnet radius to player. |
 | `MainMenuController.gd` | `MainMenu.tscn` | New game / continue / settings navigation, save-file detection. |
-| `PrefabDesignerController.gd` | `PrefabDesigner.tscn` | Full in-engine template editor. Loads templates listed in `BUILTIN_TEMPLATE_PATHS` (add new entries here to expose a template in the UI). Saves back to the same `.json` path — **edits are live immediately in the game with no baking step.** |
+| `PrefabDesignerController.gd` | `PrefabDesigner.tscn` | Full in-engine template editor. Loads templates listed in `BUILTIN_TEMPLATE_PATHS`. Saves back to the same `.json` path — edits are live in the game immediately. |
 
 ### `scripts/factories/`
 
@@ -169,7 +186,7 @@ Thin node graphs. All logic lives in `scripts/controllers/`. The scene just decl
 | `World.tscn` | TileMap-style renderer. Receives chunk tile arrays from `WorldGenerator` and draws them. |
 | `Player.tscn` | Player character: `CharacterBody2D` + sprite + mining arm. |
 | `Enemy.tscn` | Enemy entity: `CharacterBody2D` + sprite + hitbox. |
-| `Hud.tscn` | CanvasLayer UI: hearts, hotbar, inventory grid. |
+| `Hud.tscn` | CanvasLayer UI: hearts, hotbar, inventory grid, equipment panel. |
 | `MainMenu.tscn` | Full-screen menu: new game, continue, settings buttons. |
 | `PrefabDesigner.tscn` | Template editor overlay: canvas, layer toggles, tile palette, load/save buttons. |
 
@@ -180,14 +197,32 @@ Thin node graphs. All logic lives in `scripts/controllers/`. The scene just decl
 Headless GDScript test files. Run individually:
 
 ```bash
-godot4 --headless --path deepbound_godot --script tests/<name>.gd
+godot --headless --path deepbound_godot --script tests/<name>.gd
 ```
 
-Exit code 0 = pass, 1 = fail.
+Or from inside `deepbound_godot/`:
+
+```bash
+/Applications/Godot.app/Contents/MacOS/Godot --headless -s tests/<name>.gd
+```
+
+Exit code 0 = pass, 1 = fail. All tests `extends SceneTree` and call `quit(0/1)` from `_initialize`.
 
 | File | What it tests |
 |------|--------------|
-| `smoke_tests.gd` | Band resolution, basic world generation, catalog presence |
+| `smoke_tests.gd` | Band resolution, world generation, catalog presence, scene instantiation |
+| `equipment_tests.gd` | EquipmentCatalog queries, EquipmentSystem slot mutations + signal, StatCalculator stat accumulation + utility radius, HudController equipment panel geometry and drag-drop |
+| `inventory_tests.gd` | Stack merge/swap, extra hotbar storage, hotbar drag/drop, manual world-item dragging, click pickup, special auto-pickup |
+| `heart_tests.gd` | HP math, damage application, death threshold |
+| `chest_tests.gd` | Block-backed chest open/close, mining spill drops, hotbar placement, placement rejection |
+| `collision_tests.gd` | AABB sweep correctness, slope and corner cases |
+| `spawn_tests.gd` | `SpawnSystem` finds valid floor positions, respects solid tiles |
+| `animation_tests.gd` | Sprite sheet frame counts and animation state machines |
+| `background_tests.gd` | Background tile generation per-band and structure overlay correctness |
+| `input_tests.gd` | Simulated input events routed through PlayerController |
+| `menu_tests.gd` | Main menu state transitions and save-file detection |
+| `save_game_tests.gd` | Round-trip serialise/deserialise world state |
+| `movement_perf_tests.gd` | Frame-time budget for collision + movement under load |
 | `asset_tests.gd` | Every PNG exists with correct dimensions; all source boards and previews present |
 | `village_template_tests.gd` | Base template system validation shared across all village types |
 | `prefab_template_tests.gd` | Full PrefabTemplateRegistry and PrefabDesignerController integration |
@@ -195,17 +230,6 @@ Exit code 0 = pass, 1 = fail.
 | `dwarf_fortress_tests.gd` | Dwarf fortress Band 2 placement |
 | `dwarf_settlement_tests.gd` | Dwarf settlement Band 2 placement, ledges, cistern, back-house props |
 | `drow_village_tests.gd` | Drow village Band 4 placement, all room types, spectral lights, matriarch spawns |
-| `collision_tests.gd` | AABB sweep correctness, slope and corner cases |
-| `spawn_tests.gd` | `SpawnSystem` finds valid floor positions, respects solid tiles |
-| `animation_tests.gd` | Sprite sheet frame counts and animation state machines |
-| `background_tests.gd` | Background tile generation per-band and structure overlay correctness |
-| `chest_tests.gd` | Chest loot generation and inventory transfer |
-| `heart_tests.gd` | HP math, damage application, death threshold |
-| `inventory_tests.gd` | Stacking, hotbar selection, drag-and-drop edge cases |
-| `input_tests.gd` | Simulated input events routed through PlayerController |
-| `menu_tests.gd` | Main menu state transitions and save-file detection |
-| `save_game_tests.gd` | Round-trip serialise/deserialise world state |
-| `movement_perf_tests.gd` | Frame-time budget for collision + movement under load |
 
 ---
 
@@ -237,15 +261,16 @@ Python 3 scripts. Not loaded by Godot — run from the terminal.
 
 | File | Purpose |
 |------|---------|
-| `Architecture.md` | High-level system overview: world gen pipeline, chunk flow, band system |
-| `Gameplay.md` | Player controls, mining mechanics, combat, economy |
-| `Drow_Village_Template.md` | Drow enclave building-kit spec: tile set, prop set, room types |
-| `Prefab_Template_System.md` | How templates are authored, validated, and applied at worldgen time |
-| `Art_Production_Package.md` | Art handoff guide: reference board format, crop conventions, palette rules |
-| `Studio_Sprints_1_5.md` | Sprint history and feature completion log |
-| `Villager_Sprite_Reference_Sprints.md` | Villager sprite animation spec and frame assignments |
-| `Goblin_Village_Expansion_Analysis.md` | Design analysis for the goblin village expansion rooms |
-| `Directory_Guide.md` | **This file.** Folder structure and file-purpose index for AI assistants. |
+| `Architecture.md` | High-level system overview: runtime structure, patterns in use, and deep dives into every major system (Inventory, Equipment & Stat Engine, Crafting, NPC/Dialogue/Vendor, InteractableComponent, World & Lighting, Procedural Generation, Save/Load, Health, Controls). Includes a Future Roadmap section. |
+| `Developer_Guide.md` | Comprehensive contributor guide: setup, codebase tour, how every system works with code examples, step-by-step recipes for adding new content, testing patterns, and GDScript 4.6 gotchas. **Start here if you are new to the codebase.** |
+| `Gameplay.md` | Player-facing guide: controls, mining, inventory, hotbar, equipment, NPCs, chests, world drops, health, HUD. |
+| `Drow_Village_Template.md` | Drow enclave building-kit spec: tile set, prop set, room types. |
+| `Prefab_Template_System.md` | How templates are authored, validated, and applied at worldgen time. |
+| `Art_Production_Package.md` | Art handoff guide: reference board format, crop conventions, palette rules. |
+| `Studio_Sprints_1_5.md` | Sprint history and feature completion log. |
+| `Villager_Sprite_Reference_Sprints.md` | Villager sprite animation spec and frame assignments. |
+| `Goblin_Village_Expansion_Analysis.md` | Design analysis for the goblin village expansion rooms. |
+| `Directory_Guide.md` | **This file.** Folder structure and file-purpose index for AI assistants and new contributors. |
 
 ---
 
@@ -265,6 +290,20 @@ WorldGenerator.generate_chunk(seed, chunk)
       → PrefabTemplateRegistry.loaded_templates()
           reads: data/templates/*.json   (auto-discovers all files)
       → overlays foreground, backgrounds, props, spawns
+
+Equipment stat flow (on equip/unequip):
+  EquipmentSystem.equipment_changed  →  Main._on_equipment_changed()
+  → StatCalculator.compute(equipment_system)
+      → player.set_equipment_speed_bonus(speed)
+      → player.set_equipment_defense_bonus(defense)
+      → player.set_equipment_health_delta(health_max)
+      → world.set_player_utility_light(light_radius)
+
+NPC interaction flow:
+  Player presses T  →  Main._handle_interact()
+  → npc.interactable.try_interact(player)   emits interacted signal
+  → Main._on_npc_interacted(_, npc_id)
+  → hud.open_dialogue(npc_id, node_ids)  →  dialogue / vendor panel
 
 PrefabDesignerController (editor)
   loads:  BUILTIN_TEMPLATE_PATHS  →  data/templates/*.json

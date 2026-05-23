@@ -30,6 +30,8 @@ const EnemyCatalog          = preload("res://scripts/catalogs/EnemyCatalog.gd")
 const ModifierCatalog       = preload("res://scripts/catalogs/ModifierCatalog.gd")
 const StatusEffectCatalog   = preload("res://scripts/catalogs/StatusEffectCatalog.gd")
 const StatusManager         = preload("res://scripts/components/StatusManager.gd")
+const LiquidCatalog         = preload("res://scripts/catalogs/LiquidCatalog.gd")
+const ItemCatalog           = preload("res://scripts/catalogs/ItemCatalog.gd")
 
 const TEST_CHEST_OFFSET := Vector2(64, -16)
 const TEST_CHEST_OPEN_DISTANCE := 46.0
@@ -501,7 +503,69 @@ func _try_open_clicked_chest(world_point: Vector2) -> bool:
 func _try_use_selected_hotbar_item(world_point: Vector2) -> bool:
 	if _try_open_clicked_chest(world_point):
 		return true
+	if _try_use_bucket(world_point):
+		return true
 	return _try_place_selected_hotbar_item(world_point)
+
+## Handle empty/filled bucket use.
+## Empty bucket: scoop a full tile of liquid (volume == MAX_VOLUME).
+## Filled bucket: pour liquid into an empty, non-solid tile.
+## Returns true when the bucket action consumed the item-use event.
+func _try_use_bucket(world_point: Vector2) -> bool:
+	if world == null or player == null or player.get("inventory") == null:
+		return false
+	var stack := _selected_hotbar_stack()
+	var item_id := String(stack.get("item", ""))
+	if item_id == "" or int(stack.get("count", 0)) <= 0:
+		return false
+	var item_def: Dictionary = ItemCatalog.get_item(item_id)
+	if not bool(item_def.get("is_container", false)):
+		return false
+
+	var target_tile: Vector2i = world.world_to_tile(world_point)
+	var held_liquid := int(item_def.get("held_liquid", 0))
+
+	if held_liquid == LiquidCatalog.NONE:
+		# ── Empty bucket: try to scoop ──────────────────────────────────────
+		var entry: Dictionary = world.store.get_liquid(target_tile)
+		var tile_type := int(entry.get("type", 0))
+		var tile_vol  := int(entry.get("volume", 0))
+		if tile_type == LiquidCatalog.NONE or tile_vol < LiquidCatalog.MAX_VOLUME:
+			return false  # not a full tile — can't scoop
+		var bucket_item := LiquidCatalog.bucket_item_for_type(tile_type)
+		if bucket_item == "":
+			return false
+		world.store.clear_liquid(target_tile)
+		world.wake_liquid_adjacent(target_tile)
+		world._queue_liquid_redraw()
+		player.inventory.decrement_hotbar_slot(selected_hotbar_index, 1)
+		player.inventory.add_item(bucket_item, 1)
+		_sync_selected_hotbar_item()
+		if hud != null:
+			hud.queue_redraw()
+		return true
+	else:
+		# ── Filled bucket: try to pour ──────────────────────────────────────
+		if world.is_solid_tile(target_tile):
+			return false
+		var existing: Dictionary = world.store.get_liquid(target_tile)
+		var existing_type := int(existing.get("type", 0))
+		# Only pour into empty cells or same-type cells with room.
+		if existing_type != LiquidCatalog.NONE and existing_type != held_liquid:
+			return false
+		var existing_vol := int(existing.get("volume", 0))
+		if existing_vol >= LiquidCatalog.MAX_VOLUME:
+			return false  # already full
+		world.store.set_liquid(target_tile, held_liquid, LiquidCatalog.MAX_VOLUME)
+		world.wake_liquid_adjacent(target_tile)
+		world._queue_liquid_redraw()
+		# Replace the filled bucket with an empty one in the same slot.
+		player.inventory.decrement_hotbar_slot(selected_hotbar_index, 1)
+		player.inventory.add_item("empty_bucket", 1)
+		_sync_selected_hotbar_item()
+		if hud != null:
+			hud.queue_redraw()
+		return true
 
 func _try_place_selected_hotbar_item(world_point: Vector2) -> bool:
 	if world == null or player == null or player.get("inventory") == null:

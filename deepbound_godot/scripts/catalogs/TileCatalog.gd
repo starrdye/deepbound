@@ -38,7 +38,8 @@ const TILES := {
 	"workbench_block": {"name": "Workbench", "band": "shared", "hardness": 2.0, "breakable": true, "solid": true, "blocks_light": true, "occlusion": 0.60, "color": Color8(120, 72, 34), "highlight": Color8(210, 140, 68), "value": 0.0, "drops": [{"item": "workbench", "min": 1, "max": 1, "chance": 1.0}]},
 	"furnace_block": {"name": "Furnace", "band": "shared", "hardness": 3.0, "breakable": true, "solid": true, "blocks_light": true, "occlusion": 0.82, "color": Color8(66, 60, 60), "highlight": Color8(255, 120, 40), "value": 0.0, "drops": [{"item": "furnace", "min": 1, "max": 1, "chance": 1.0}]},
 	"anvil_block": {"name": "Anvil", "band": "shared", "hardness": 4.0, "breakable": true, "solid": true, "blocks_light": true, "occlusion": 0.76, "color": Color8(54, 58, 64), "highlight": Color8(180, 185, 190), "value": 0.0, "drops": [{"item": "anvil", "min": 1, "max": 1, "chance": 1.0}]},
-	"solid_dark_block": {"name": "Solid Dark Block", "band": "solid_dark_blocks", "hardness": 9999.0, "breakable": false, "solid": true, "blocks_light": true, "occlusion": 1.0, "color": Color8(5, 6, 17), "highlight": Color8(34, 39, 70), "value": 0.0, "drops": []}
+	"solid_dark_block": {"name": "Solid Dark Block", "band": "solid_dark_blocks", "hardness": 9999.0, "breakable": false, "solid": true, "blocks_light": true, "occlusion": 1.0, "color": Color8(5, 6, 17), "highlight": Color8(34, 39, 70), "value": 0.0, "drops": []},
+	"obsidian": {"name": "Obsidian", "band": "shared", "hardness": 8.5, "breakable": true, "solid": true, "blocks_light": true, "occlusion": 0.98, "color": Color8(18, 15, 22), "highlight": Color8(255, 93, 36), "value": 12.0, "drops": [{"item": "obsidian_chip", "min": 1, "max": 2, "chance": 1.0}]}
 }
 
 static func get_tile(tile_id: String) -> Dictionary:

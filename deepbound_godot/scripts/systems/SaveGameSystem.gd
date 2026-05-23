@@ -195,6 +195,7 @@ static func _snapshot_world(world) -> Dictionary:
 		"generated_chunks": store.export_generated_chunks() if store.has_method("export_generated_chunks") else {},
 		"generated_background_chunks": store.export_generated_background_chunks() if store.has_method("export_generated_background_chunks") else {},
 		"frozen_structures": _structures_to_data(world.snapshot_structures_for_generated_chunks() if world.has_method("snapshot_structures_for_generated_chunks") else []),
+		"liquids": store.export_liquids() if store.has_method("export_liquids") else [],
 	}
 
 static func _snapshot_player(player) -> Dictionary:
@@ -258,6 +259,10 @@ static func _apply_world_store_state(world, world_data: Dictionary) -> void:
 	world.store.background_damage = _tile_entries_to_dictionary(world_data.background_damage, "value", true)
 	if world.has_method("set_frozen_world_state"):
 		world.set_frozen_world_state(_structures_from_data(world_data.get("frozen_structures", [])), world.store.get_generated_chunk_coords(true))
+	if world.store.has_method("import_liquids"):
+		world.store.import_liquids(world_data.get("liquids", []))
+		if world.has_method("_queue_liquid_redraw"):
+			world._queue_liquid_redraw()
 
 static func _restore_containers(world, props_node, containers: Array) -> void:
 	if props_node == null:

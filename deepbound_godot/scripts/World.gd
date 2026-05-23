@@ -3,6 +3,8 @@ class_name DeepboundWorld
 
 const TileCatalog = preload("res://scripts/catalogs/TileCatalog.gd")
 const BackgroundCatalog = preload("res://scripts/catalogs/BackgroundCatalog.gd")
+const LiquidCatalog = preload("res://scripts/catalogs/LiquidCatalog.gd")
+const LiquidSystem  = preload("res://scripts/systems/LiquidSystem.gd")
 const BandCatalog = preload("res://scripts/catalogs/BandCatalog.gd")
 const ChunkStore = preload("res://scripts/systems/ChunkStore.gd")
 const MiningSystem = preload("res://scripts/systems/MiningSystem.gd")
@@ -137,6 +139,54 @@ class DynamicWorldOverlay:
 		for flare in world.flares:
 			draw_circle(flare.position, 5.0, Color8(255, 138, 31, 170))
 
+class LiquidOverlay:
+	extends Node2D
+
+	## Draws all visible liquid cells each time the world requests a redraw.
+	## Volume maps to proportional fill height (volume/MAX_VOLUME * TILE_SIZE)
+	## so a partially-full cell shows liquid rising from the cell's bottom edge.
+	## This node is added at z_index = 3, between foreground tiles (z=2) and the
+	## foreground prop overlay (z=3, added afterward in the tree).
+
+	const TILE_SIZE  := 16
+	const MAX_VOLUME := 8   # LiquidCatalog.MAX_VOLUME — duplicated to avoid preload
+
+	var world
+	var draw_count := 0
+
+	func setup(world_ref) -> void:
+		world = world_ref
+		name = "LiquidOverlay"
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		z_index = 3
+
+	func _draw() -> void:
+		draw_count += 1
+		if world == null:
+			return
+		var liquids: Dictionary = world.store.liquids
+		if liquids.is_empty():
+			return
+		var vis_rect: Rect2i = world._current_visible_tile_rect()
+		for tile in liquids.keys():
+			if not vis_rect.has_point(tile):
+				continue
+			var entry: Dictionary = liquids[tile]
+			var liq_type := int(entry.get("type",   0))
+			var volume   := int(entry.get("volume", 0))
+			if liq_type == 0 or volume <= 0:
+				continue
+			# Fill height proportional to volume; liquid rises from the cell bottom.
+			var fill_h   := int(float(volume) / float(MAX_VOLUME) * float(TILE_SIZE))
+			if fill_h <= 0:
+				continue
+			var world_x  := tile.x * TILE_SIZE
+			var world_y  := tile.y * TILE_SIZE + (TILE_SIZE - fill_h)
+			var rect     := Rect2(Vector2(float(world_x), float(world_y)),
+			                      Vector2(float(TILE_SIZE), float(fill_h)))
+			var col := world._liquid_draw_color(liq_type, volume)
+			draw_rect(rect, col, true)
+
 @export var player_path: NodePath
 
 var store = ChunkStore.new(133742)
@@ -172,13 +222,19 @@ var last_chunk_warm_center_tile := Vector2i(999999, 999999)
 var frozen_structures_by_id: Dictionary = {}
 var frozen_structure_chunk_index: Dictionary = {}
 var frozen_chunk_keys: Dictionary = {}
+## Liquid CA active-set: Vector2i → true  (cells that need simulation on next tick)
+var _liquid_active: Dictionary = {}
+var _liquid_overlay: Node2D = null
+var _liquid_timer: Timer = null
 
 func _ready() -> void:
 	player = get_node_or_null(player_path)
 	z_index = -10
 	_ensure_placement_preview_overlay()
+	_ensure_liquid_overlay()
 	_ensure_prop_overlays()
 	_ensure_dynamic_overlay()
+	_setup_liquid_timer()
 	last_redraw_center_tile = world_to_tile(_draw_center_position())
 	refresh_visible_chunk_window(true)
 	_queue_dynamic_overlay_redraw()
@@ -202,6 +258,7 @@ func reset_for_loaded_state(world_seed: int) -> void:
 	container_blocks.clear()
 	beacons.clear()
 	flares.clear()
+	_liquid_active.clear()
 	_clear_frozen_world_state()
 	clear_placement_preview()
 	_clear_runtime_render_state()
@@ -318,10 +375,19 @@ func get_tile(tile: Vector2i) -> String:
 	return store.get_tile(tile)
 
 func set_tile(tile: Vector2i, tile_id: String) -> void:
+	var was_solid := store.is_solid(tile)
 	store.set_tile(tile, tile_id)
 	_clear_solid_tile_cache()
 	_record_perf_event("tile_mutation")
 	invalidate_tile_chunk(tile, true)
+	# Solid block placed → displace any liquid occupying this cell.
+	if TileCatalog.is_solid(tile_id):
+		if not store.get_liquid(tile).is_empty():
+			store.clear_liquid(tile)
+			_queue_liquid_redraw()
+	# Solid block removed → wake adjacent liquid so it can flow into the gap.
+	elif was_solid:
+		wake_liquid_adjacent(tile)
 
 func get_background_tile(tile: Vector2i) -> String:
 	return store.get_background_tile(tile)
@@ -882,6 +948,95 @@ func _ensure_dynamic_overlay() -> Node2D:
 	dynamic_overlay.setup(self)
 	add_child(dynamic_overlay)
 	return dynamic_overlay
+
+func _ensure_liquid_overlay() -> Node2D:
+	if _liquid_overlay != null and is_instance_valid(_liquid_overlay):
+		return _liquid_overlay
+	var existing := get_node_or_null("LiquidOverlay") as Node2D
+	if existing != null:
+		_liquid_overlay = existing
+		return _liquid_overlay
+	_liquid_overlay = LiquidOverlay.new()
+	_liquid_overlay.setup(self)
+	add_child(_liquid_overlay)
+	return _liquid_overlay
+
+func _setup_liquid_timer() -> void:
+	if _liquid_timer != null and is_instance_valid(_liquid_timer):
+		return
+	_liquid_timer = Timer.new()
+	_liquid_timer.name = "LiquidTimer"
+	_liquid_timer.wait_time = 0.1   # 10 Hz
+	_liquid_timer.autostart = true
+	_liquid_timer.one_shot = false
+	_liquid_timer.timeout.connect(_liquid_tick)
+	add_child(_liquid_timer)
+
+## Called 10 times per second by the liquid timer.
+## Runs one CA tick across the active set and processes reactions.
+func _liquid_tick() -> void:
+	if _liquid_active.is_empty():
+		return
+	var result: Dictionary = LiquidSystem.tick(store, self, _liquid_active)
+	_liquid_active = result.get("next_active", {})
+
+	# Apply block-placement reactions (e.g. Water + Lava → Obsidian).
+	var reactions: Array = result.get("reactions", [])
+	for reaction in reactions:
+		var r: Dictionary = Dictionary(reaction)
+		var rtile: Vector2i = r.get("tile", Vector2i.ZERO)
+		var rtile_id: String = String(r.get("tile_id", ""))
+		if rtile_id != "":
+			set_tile(rtile, rtile_id)
+
+	_queue_liquid_redraw()
+
+## Returns the draw colour for a liquid cell.  Called by LiquidOverlay._draw().
+func _liquid_draw_color(liq_type: int, volume: int) -> Color:
+	var base := LiquidCatalog.get_color(liq_type)
+	var alpha := LiquidCatalog.get_alpha(liq_type, volume)
+	return Color(base.r, base.g, base.b, alpha)
+
+## Place liquid at a tile and wake the CA for that region.
+## Returns true if placement succeeded (cell not solid, type valid).
+func place_liquid(tile: Vector2i, liquid_type: int, volume: int) -> bool:
+	if is_solid_tile(tile):
+		return false
+	if not LiquidCatalog.is_valid_type(liquid_type):
+		return false
+	var clamped_vol := clampi(volume, 0, LiquidCatalog.MAX_VOLUME)
+	if clamped_vol <= 0:
+		store.clear_liquid(tile)
+	else:
+		store.set_liquid(tile, liquid_type, clamped_vol)
+	wake_liquid_adjacent(tile)
+	_queue_liquid_redraw()
+	return true
+
+## Scoop all liquid from a tile.  Returns the liquid type (0 = nothing scooped).
+func scoop_liquid(tile: Vector2i) -> int:
+	var entry: Dictionary = store.get_liquid(tile)
+	var liq_type := int(entry.get("type", 0))
+	if liq_type == 0:
+		return 0
+	store.clear_liquid(tile)
+	wake_liquid_adjacent(tile)
+	_queue_liquid_redraw()
+	return liq_type
+
+## Adds a tile and its four cardinal neighbours to the active set so they are
+## simulated on the next tick.  Call after placing/removing blocks next to liquid.
+func wake_liquid_adjacent(tile: Vector2i) -> void:
+	_liquid_active[tile]                    = true
+	_liquid_active[tile + Vector2i( 0, -1)] = true
+	_liquid_active[tile + Vector2i( 0,  1)] = true
+	_liquid_active[tile + Vector2i(-1,  0)] = true
+	_liquid_active[tile + Vector2i( 1,  0)] = true
+
+func _queue_liquid_redraw() -> void:
+	var overlay := _ensure_liquid_overlay()
+	if overlay != null:
+		overlay.queue_redraw()
 
 func _container_parent_node() -> Node2D:
 	if container_parent != null and is_instance_valid(container_parent):

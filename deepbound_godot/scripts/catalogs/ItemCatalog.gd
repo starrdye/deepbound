@@ -140,6 +140,43 @@ const ITEMS := {
 		"rarity": "uncommon",
 		"category": "placeable",
 	},
+	# ── Buckets ──────────────────────────────────────────────────────────────
+	"empty_bucket": {
+		"name": "Empty Bucket",
+		"desc": "A tin bucket. Scoop a full tile of liquid\nto fill it.",
+		"rarity": "common",
+		"category": "tool",
+		"is_container": true,
+		"held_liquid": 0,
+		"capacity": 8,
+	},
+	"water_bucket": {
+		"name": "Bucket of Water",
+		"desc": "A bucket brimming with water.\nRight-click an empty tile to pour.",
+		"rarity": "common",
+		"category": "tool",
+		"is_container": true,
+		"held_liquid": 1,
+		"capacity": 8,
+	},
+	"lava_bucket": {
+		"name": "Bucket of Lava",
+		"desc": "Molten rock fills this bucket.\nHandle with care — pours scorching lava.",
+		"rarity": "uncommon",
+		"category": "tool",
+		"is_container": true,
+		"held_liquid": 2,
+		"capacity": 8,
+	},
+	"honey_bucket": {
+		"name": "Bucket of Honey",
+		"desc": "Thick golden honey scooped from deep combs.\nPours slowly but spreads far.",
+		"rarity": "uncommon",
+		"category": "tool",
+		"is_container": true,
+		"held_liquid": 3,
+		"capacity": 8,
+	},
 	# ── Equipment — Head ─────────────────────────────────────────────────────
 	"iron_helm": {
 		"name": "Iron Helm",

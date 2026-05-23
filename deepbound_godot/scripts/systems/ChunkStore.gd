@@ -12,6 +12,9 @@ var overrides: Dictionary = {}
 var background_overrides: Dictionary = {}
 var damage: Dictionary = {}
 var background_damage: Dictionary = {}
+## Sparse liquid data: Vector2i → {"type": int, "volume": int}
+## Only tiles with volume > 0 are stored.  Keyed by world tile coordinate.
+var liquids: Dictionary = {}
 var generated_chunk_count := 0
 var generated_background_chunk_count := 0
 
@@ -126,6 +129,45 @@ func clear_background_damage(tile: Vector2i) -> void:
 
 func is_solid(tile: Vector2i) -> bool:
 	return TileCatalog.is_solid(get_tile(tile))
+
+## Returns the liquid dict for a tile, or {} if empty.
+func get_liquid(tile: Vector2i) -> Dictionary:
+	return liquids.get(tile, {})
+
+## Store liquid state for a tile.  Automatically removes the entry when volume ≤ 0.
+func set_liquid(tile: Vector2i, liquid_type: int, volume: int) -> void:
+	if volume <= 0:
+		liquids.erase(tile)
+	else:
+		liquids[tile] = {"type": liquid_type, "volume": volume}
+
+## Remove all liquid from a tile.
+func clear_liquid(tile: Vector2i) -> void:
+	liquids.erase(tile)
+
+## Serialise liquid data to an array of dicts for save files.
+func export_liquids() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for tile in liquids.keys():
+		var entry: Dictionary = liquids[tile]
+		result.append({
+			"x":      int(tile.x),
+			"y":      int(tile.y),
+			"type":   int(entry.get("type",   0)),
+			"volume": int(entry.get("volume", 0)),
+		})
+	return result
+
+## Restore liquid data from a saved array.
+func import_liquids(data: Array) -> void:
+	liquids.clear()
+	for raw in data:
+		var entry := Dictionary(raw)
+		var t      := Vector2i(int(entry.get("x", 0)), int(entry.get("y", 0)))
+		var ltype  := int(entry.get("type",   0))
+		var lvol   := int(entry.get("volume", 0))
+		if ltype > 0 and lvol > 0:
+			liquids[t] = {"type": ltype, "volume": lvol}
 
 static func _chunk_dictionary_to_data(source: Dictionary) -> Dictionary:
 	var result := {}

@@ -168,10 +168,11 @@ class LiquidOverlay:
 		if liquids.is_empty():
 			return
 		var vis_rect: Rect2i = world._current_visible_tile_rect()
-		for tile in liquids.keys():
+		for raw_tile in liquids.keys():
+			var tile: Vector2i = Vector2i(raw_tile)
 			if not vis_rect.has_point(tile):
 				continue
-			var entry: Dictionary = liquids[tile]
+			var entry: Dictionary = Dictionary(liquids[tile])
 			var liq_type := int(entry.get("type",   0))
 			var volume   := int(entry.get("volume", 0))
 			if liq_type == 0 or volume <= 0:
@@ -180,11 +181,11 @@ class LiquidOverlay:
 			var fill_h   := int(float(volume) / float(MAX_VOLUME) * float(TILE_SIZE))
 			if fill_h <= 0:
 				continue
-			var world_x  := tile.x * TILE_SIZE
-			var world_y  := tile.y * TILE_SIZE + (TILE_SIZE - fill_h)
-			var rect     := Rect2(Vector2(float(world_x), float(world_y)),
-			                      Vector2(float(TILE_SIZE), float(fill_h)))
-			var col := world._liquid_draw_color(liq_type, volume)
+			var world_x: int = tile.x * TILE_SIZE
+			var world_y: int = tile.y * TILE_SIZE + (TILE_SIZE - fill_h)
+			var rect: Rect2  = Rect2(Vector2(float(world_x), float(world_y)),
+			                         Vector2(float(TILE_SIZE), float(fill_h)))
+			var col: Color   = Color(world._liquid_draw_color(liq_type, volume))
 			draw_rect(rect, col, true)
 
 @export var player_path: NodePath

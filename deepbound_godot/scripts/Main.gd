@@ -186,6 +186,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			hud.close_vendor()
 			get_viewport().set_input_as_handled()
 			return
+		# Close container first, then inventory, before opening the pause menu.
+		if active_container != null and hud != null and bool(hud.get("container_open")):
+			_close_active_container()
+			get_viewport().set_input_as_handled()
+			return
+		if hud != null and bool(hud.get("inventory_open")):
+			hud.close_inventory()
+			get_viewport().set_input_as_handled()
+			return
 		_toggle_pause_menu()
 		get_viewport().set_input_as_handled()
 		return

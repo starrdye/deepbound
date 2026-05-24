@@ -1072,6 +1072,8 @@ func _seed_default_chest_contents(chest) -> void:
 		chest.inventory.add_item("wooden_sword", 1)
 		chest.inventory.add_item("wooden_background_block", 10)
 		chest.inventory.add_item("hammer", 1)
+		chest.inventory.add_item("empty_bucket", 1)
+		chest.inventory.add_item("water_bucket", 5)
 
 func _append_inventory_drops(inventory, drops: Array[Dictionary]) -> void:
 	if inventory == null:

@@ -82,7 +82,7 @@ var _tooltip_border_color := Color.TRANSPARENT
 ## Crafting panel state
 var _craft_statuses: Array[Dictionary] = []
 var _craft_scroll: int = 0
-var _craft_show_all: bool = false
+var _craft_show_all: bool = true   # show all recipes by default; toggle hides uncraftable
 var _craft_held_recipe_id: String = ""
 var _hovered_craft_id: String = ""
 
@@ -1228,9 +1228,9 @@ func _draw_crafting_panel() -> void:
 	if god_mode:
 		btn_bg = Color8(80, 40, 10)
 	elif _craft_show_all:
-		btn_bg = Color8(40, 55, 78)
+		btn_bg = Color8(30, 48, 70)   # default state — subtle highlight
 	else:
-		btn_bg = Color(0.08, 0.075, 0.085, 0.92)
+		btn_bg = Color8(55, 28, 28)   # filtered state — reddish tint to signal things are hidden
 	draw_rect(btn, btn_bg, true)
 	draw_rect(btn, Color8(91, 100, 107), false, 1.0)
 	if font != null:
@@ -1242,8 +1242,9 @@ func _draw_crafting_panel() -> void:
 			for s in _craft_statuses:
 				if bool(s.get("craftable", false)):
 					craftable_count += 1
-			btn_label = "Show All (%d)" % _craft_statuses.size() if _craft_show_all \
-				else "Craftable (%d)" % craftable_count
+			# Default is show-all; button hides uncraftable when toggled off.
+			btn_label = "Hide Uncraftable" if _craft_show_all \
+				else "Show All (%d)" % _craft_statuses.size()
 		var lbl_col := Color8(255, 200, 80) if god_mode else Color8(200, 200, 210)
 		draw_string(font, Vector2(btn.position.x, btn.position.y + 16.0),
 			btn_label, HORIZONTAL_ALIGNMENT_CENTER, btn.size.x, 10, lbl_col)

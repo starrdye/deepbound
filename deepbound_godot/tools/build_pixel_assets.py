@@ -30,6 +30,8 @@ AI_DWARF_SETTLEMENT_REFERENCE = ROOT / "assets" / "source_ai" / "dwarf_settlemen
 AI_HEART_CHEST_REFERENCE = ROOT / "assets" / "source_ai" / "chest_heart_ai_reference.png"
 AI_WEAPON_REFERENCE = ROOT / "assets" / "source_ai" / "weapon_modular_ai_reference.png"
 AI_HELD_ITEM_REFERENCE = ROOT / "assets" / "source_ai" / "held_item_pose_ai_reference.png"
+AI_V011_ITEM_REFERENCE = ROOT / "assets" / "source_ai" / "v011_item_icons_ai_reference.png"
+AI_DROW_ACOLYTE_REFERENCE = ROOT / "assets" / "source_ai" / "drow_acolyte_ai_reference.png"
 
 FRAME_W = 32
 FRAME_H = 32
@@ -2026,6 +2028,50 @@ def make_item_icon(name: str, color: tuple[int, int, int], highlight: tuple[int,
     return img
 
 
+def make_v011_item_icons_from_ai() -> list[Image.Image]:
+    if not AI_V011_ITEM_REFERENCE.exists():
+        return []
+
+    src = Image.open(AI_V011_ITEM_REFERENCE).convert("RGBA")
+    specs = [
+        ("empty_bucket", (160, 135), (170, 170)),
+        ("water_bucket", (400, 135), (170, 170)),
+        ("lava_bucket", (640, 135), (170, 170)),
+        ("honey_bucket", (880, 135), (170, 170)),
+        ("crystal_sword", (1130, 135), (190, 190)),
+        ("cursed_sword", (155, 385), (190, 190)),
+        ("iron_helm", (400, 385), (170, 170)),
+        ("crystal_helm", (640, 385), (170, 170)),
+        ("leather_vest", (880, 385), (170, 170)),
+        ("iron_chestplate", (1120, 385), (170, 170)),
+        ("leather_pants", (150, 635), (170, 170)),
+        ("iron_greaves", (400, 635), (170, 170)),
+        ("leather_boots", (640, 635), (170, 170)),
+        ("copper_ring", (880, 635), (160, 160)),
+        ("resin_amulet", (1125, 635), (160, 160)),
+        ("torch", (150, 885), (170, 170)),
+        ("lantern", (400, 885), (170, 170)),
+        ("crystal_drill", (640, 885), (190, 190)),
+        ("cursed_drill", (885, 885), (190, 190)),
+        ("workbench", (1120, 885), (190, 190)),
+        ("furnace", (150, 1110), (200, 200)),
+        ("anvil", (520, 1110), (200, 200)),
+        ("chest", (885, 1110), (200, 200)),
+    ]
+    icons: list[Image.Image] = []
+    for item_id, center, crop_size in specs:
+        icon = _crop_pixelized_dark_board(src, center, crop_size, (16, 16), 24)
+        icon.save(ITEM_DIR / f"{item_id}.png")
+        icons.append(icon)
+
+    atlas = Image.new("RGBA", (16 * 8, 16 * 3), (0, 0, 0, 0))
+    for index, icon in enumerate(icons):
+        atlas.alpha_composite(icon, ((index % 8) * 16, (index // 8) * 16))
+    atlas.save(ITEM_DIR / "v011_item_icon_atlas.png")
+    make_preview(atlas, PREVIEW_DIR / "v011_item_icon_atlas_preview.png", scale=8, grid=(16, 16))
+    return icons
+
+
 def make_items() -> None:
     specs = [
         ("dirt_clod", (122, 75, 46), (168, 111, 60), "chunk"),
@@ -2070,6 +2116,7 @@ def make_items() -> None:
             atlas.alpha_composite(icon, ((index % 6) * 16, (index // 6) * 16))
         atlas.save(ITEM_DIR / "item_icon_atlas.png")
         make_preview(atlas, PREVIEW_DIR / "item_icon_atlas_preview.png", scale=8, grid=(16, 16))
+        make_v011_item_icons_from_ai()
         return
 
     icons = []
@@ -2080,6 +2127,7 @@ def make_items() -> None:
         atlas.alpha_composite(icon, ((index % 6) * 16, (index // 6) * 16))
     atlas.save(ITEM_DIR / "item_icon_atlas.png")
     make_preview(atlas, PREVIEW_DIR / "item_icon_atlas_preview.png", scale=8, grid=(16, 16))
+    make_v011_item_icons_from_ai()
 
 
 def make_background_block_texture(background_id: str, base: tuple[int, int, int], hi: tuple[int, int, int], grain: str) -> Image.Image:
@@ -2413,6 +2461,28 @@ def make_dwarf_enemy_assets() -> list[Image.Image]:
     ]
 
 
+def make_drow_acolyte_enemy_asset() -> Image.Image:
+    if AI_DROW_ACOLYTE_REFERENCE.exists():
+        src = Image.open(AI_DROW_ACOLYTE_REFERENCE).convert("RGBA")
+        pose_specs = [
+            ((240, 485), (310, 390)),
+            ((650, 485), (330, 390)),
+            ((1075, 485), (410, 390)),
+            ((1485, 485), (340, 390)),
+        ]
+        pose_cells: list[Image.Image] = []
+        for center, crop_size in pose_specs:
+            pose_cells.append(_crop_pixelized_dark_board(src, center, crop_size, (FRAME_W, FRAME_H), 28))
+        sheet = Image.new("RGBA", (FRAME_W * ENEMY_COLS, FRAME_H * ENEMY_ROWS), (0, 0, 0, 0))
+        for move_row, pose_cell in enumerate(pose_cells):
+            for frame in range(ENEMY_COLS):
+                cell = _animated_enemy_cell(pose_cell, move_row, frame)
+                sheet.alpha_composite(cell, (frame * FRAME_W, move_row * FRAME_H))
+        sheet.save(ENEMY_DIR / "drow_acolyte.png")
+        return sheet
+    return make_enemy_sheet("drow_acolyte", (62, 55, 119), (112, 206, 177), "humanoid")
+
+
 def make_enemies() -> None:
     specs = [
         ("cave_skitter", (139, 70, 80), (232, 213, 161), "skitter"),
@@ -2455,6 +2525,7 @@ def make_enemies() -> None:
                     sheet.alpha_composite(cell, (frame * FRAME_W, move_row * FRAME_H))
             sheet.save(ENEMY_DIR / f"{enemy_id}.png")
             sheets.append(sheet)
+        sheets.append(make_drow_acolyte_enemy_asset())
         sheets.extend(make_goblin_enemy_assets())
         sheets.extend(make_dwarf_enemy_assets())
         atlas = Image.new("RGBA", (FRAME_W * ENEMY_COLS, FRAME_H * ENEMY_ROWS * len(sheets)), (0, 0, 0, 0))
@@ -2467,6 +2538,7 @@ def make_enemies() -> None:
     sheets = []
     for spec in specs:
         sheets.append(make_enemy_sheet(*spec))
+    sheets.append(make_drow_acolyte_enemy_asset())
     sheets.extend(make_goblin_enemy_assets())
     sheets.extend(make_dwarf_enemy_assets())
     atlas = Image.new("RGBA", (FRAME_W * ENEMY_COLS, FRAME_H * ENEMY_ROWS * len(sheets)), (0, 0, 0, 0))

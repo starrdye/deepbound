@@ -1223,7 +1223,6 @@ func _draw_crafting_panel() -> void:
 				item_name, HORIZONTAL_ALIGNMENT_LEFT, slot_rect.size.x - SLOT_SIZE - 4.0, 11, name_col)
 	# Scroll indicators — draw ▲ / ▼ arrows when there are hidden recipes above/below.
 	if font != null and visible.size() > CRAFT_VISIBLE_SLOTS:
-		var panel := _crafting_panel_rect()
 		var arrow_col := Color8(200, 200, 220, 180)
 		if _craft_scroll > 0:
 			draw_string(font,

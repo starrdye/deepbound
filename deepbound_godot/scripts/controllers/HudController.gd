@@ -48,7 +48,7 @@ const TOOLTIP_NAME_SZ := 14
 const TOOLTIP_BODY_SZ := 11
 const TOOLTIP_LINE_GAP := 3.0
 
-const CRAFT_VISIBLE_SLOTS := 4
+const CRAFT_VISIBLE_SLOTS := 10
 const CRAFT_FOOTER_H := 24.0
 const CRAFT_PANEL_W := 148.0
 
@@ -1221,6 +1221,19 @@ func _draw_crafting_panel() -> void:
 			draw_string(font,
 				Vector2(slot_rect.position.x + SLOT_SIZE + 4.0, slot_rect.position.y + 22.0),
 				item_name, HORIZONTAL_ALIGNMENT_LEFT, slot_rect.size.x - SLOT_SIZE - 4.0, 11, name_col)
+	# Scroll indicators — draw ▲ / ▼ arrows when there are hidden recipes above/below.
+	if font != null and visible.size() > CRAFT_VISIBLE_SLOTS:
+		var panel := _crafting_panel_rect()
+		var arrow_col := Color8(200, 200, 220, 180)
+		if _craft_scroll > 0:
+			draw_string(font,
+				Vector2(panel.position.x + CRAFT_PANEL_W * 0.5 - 4.0, panel.position.y + PANEL_PADDING + PANEL_HEADER - 4.0),
+				"▲", HORIZONTAL_ALIGNMENT_CENTER, -1.0, 11, arrow_col)
+		if _craft_scroll < visible.size() - CRAFT_VISIBLE_SLOTS:
+			var last_slot := _craft_item_slot_rect(CRAFT_VISIBLE_SLOTS - 1)
+			draw_string(font,
+				Vector2(panel.position.x + CRAFT_PANEL_W * 0.5 - 4.0, last_slot.end.y + 2.0),
+				"▼", HORIZONTAL_ALIGNMENT_CENTER, -1.0, 11, arrow_col)
 	# Footer: show-all toggle + count indicator (god mode overrides label)
 	var btn := _craft_show_all_button_rect()
 	var god_mode := DebugSystem.god_mode_enabled

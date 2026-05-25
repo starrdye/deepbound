@@ -17,7 +17,13 @@ const STATION_TILE_MAP := {
 
 ## Scans tiles within STATION_RADIUS_TILES of player_position and returns the
 ## set of station names that are present (e.g. {"Workbench": true}).
+## In god mode every station is considered active regardless of proximity.
 static func detect_active_stations(world, player_position: Vector2) -> Dictionary:
+	if DebugSystem.god_mode_enabled:
+		var all := {}
+		for station_name in STATION_TILE_MAP.values():
+			all[String(station_name)] = true
+		return all
 	if world == null or not world.has_method("get_tile") or not world.has_method("world_to_tile"):
 		return {}
 	var player_tile: Vector2i = world.world_to_tile(player_position)
@@ -58,6 +64,9 @@ static func execute_craft(recipe_id: String, inventory, active_stations: Diction
 	return stack
 
 static func _can_craft(recipe: Dictionary, inventory, active_stations: Dictionary) -> bool:
+	# God mode: no station or material requirements.
+	if DebugSystem.god_mode_enabled:
+		return true
 	for station in recipe.get("stations", []):
 		if not active_stations.get(String(station), false):
 			return false
@@ -67,6 +76,9 @@ static func _can_craft(recipe: Dictionary, inventory, active_stations: Dictionar
 	return true
 
 static func _consume_ingredients(inventory, ingredients: Array) -> void:
+	# God mode: materials are free — nothing to consume.
+	if DebugSystem.god_mode_enabled:
+		return
 	for ing in ingredients:
 		var item_id    := String(ing.item)
 		var to_remove  := int(ing.count)

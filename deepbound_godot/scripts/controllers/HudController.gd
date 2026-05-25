@@ -1128,7 +1128,8 @@ func _craft_item_slot_rect(visible_index: int) -> Rect2:
 	)
 
 func _visible_recipes() -> Array[Dictionary]:
-	if _craft_show_all:
+	# God mode: always show every recipe.
+	if DebugSystem.god_mode_enabled or _craft_show_all:
 		return _craft_statuses
 	var result: Array[Dictionary] = []
 	for s in _craft_statuses:
@@ -1169,7 +1170,8 @@ func _handle_craft_press(point: Vector2) -> bool:
 		accept_event()
 		return true
 	var status := visible[_craft_scroll + vis_idx]
-	if not bool(status.get("craftable", false)):
+	# God mode: every recipe is clickable regardless of craftable status.
+	if not DebugSystem.god_mode_enabled and not bool(status.get("craftable", false)):
 		accept_event()
 		return true
 	var recipe_id := String(status.get("id", ""))
@@ -1207,30 +1209,44 @@ func _draw_crafting_panel() -> void:
 		var border := Color8(160, 160, 180) if is_hovered else Color8(91, 100, 107)
 		draw_rect(slot_rect, bg, true)
 		draw_rect(slot_rect, border, false, 1.0)
-		var tint := Color.WHITE if craftable else Color(1.0, 1.0, 1.0, 0.35)
+		# God mode: treat every recipe as fully craftable for display purposes.
+		var display_craftable := craftable or DebugSystem.god_mode_enabled
+		var tint := Color.WHITE if display_craftable else Color(1.0, 1.0, 1.0, 0.35)
 		_draw_stack({"item": result_id, "count": 1, "stack_cap": 99},
 			Rect2(slot_rect.position, Vector2(SLOT_SIZE, SLOT_SIZE)), tint)
 		if font != null:
 			var def := ItemCatalog.get_item(result_id)
 			var item_name := String(def.get("name", result_id.replace("_", " ").capitalize()))
-			var name_col := Color(ItemCatalog.rarity_color(String(def.get("rarity", "common"))), 1.0 if craftable else 0.35)
+			var name_col := Color(ItemCatalog.rarity_color(String(def.get("rarity", "common"))), 1.0 if display_craftable else 0.35)
 			draw_string(font,
 				Vector2(slot_rect.position.x + SLOT_SIZE + 4.0, slot_rect.position.y + 22.0),
 				item_name, HORIZONTAL_ALIGNMENT_LEFT, slot_rect.size.x - SLOT_SIZE - 4.0, 11, name_col)
-	# Footer: show-all toggle + count indicator
+	# Footer: show-all toggle + count indicator (god mode overrides label)
 	var btn := _craft_show_all_button_rect()
-	var btn_bg := Color8(40, 55, 78) if _craft_show_all else Color(0.08, 0.075, 0.085, 0.92)
+	var god_mode := DebugSystem.god_mode_enabled
+	var btn_bg: Color
+	if god_mode:
+		btn_bg = Color8(80, 40, 10)
+	elif _craft_show_all:
+		btn_bg = Color8(40, 55, 78)
+	else:
+		btn_bg = Color(0.08, 0.075, 0.085, 0.92)
 	draw_rect(btn, btn_bg, true)
 	draw_rect(btn, Color8(91, 100, 107), false, 1.0)
 	if font != null:
-		var craftable_count := 0
-		for s in _craft_statuses:
-			if bool(s.get("craftable", false)):
-				craftable_count += 1
-		var btn_label := "Show All (%d)" % _craft_statuses.size() if _craft_show_all \
-			else "Craftable (%d)" % craftable_count
+		var btn_label: String
+		if god_mode:
+			btn_label = "★ God Mode (%d)" % _craft_statuses.size()
+		else:
+			var craftable_count := 0
+			for s in _craft_statuses:
+				if bool(s.get("craftable", false)):
+					craftable_count += 1
+			btn_label = "Show All (%d)" % _craft_statuses.size() if _craft_show_all \
+				else "Craftable (%d)" % craftable_count
+		var lbl_col := Color8(255, 200, 80) if god_mode else Color8(200, 200, 210)
 		draw_string(font, Vector2(btn.position.x, btn.position.y + 16.0),
-			btn_label, HORIZONTAL_ALIGNMENT_CENTER, btn.size.x, 10, Color8(200, 200, 210))
+			btn_label, HORIZONTAL_ALIGNMENT_CENTER, btn.size.x, 10, lbl_col)
 
 ## ── Craft ingredient tooltip ─────────────────────────────────────────────────
 

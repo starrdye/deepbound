@@ -60,6 +60,7 @@ static func snapshot_game_state(main) -> Dictionary:
 		"beacons": _vec2_array_to_data(world.beacons if world != null and world.get("beacons") != null else []),
 		"flares": _flares_to_data(world.flares if world != null and world.get("flares") != null else []),
 		"defeated_bosses": BossEncounterSystem.defeated_bosses.duplicate(),
+		"time": _snapshot_time(main),
 	})
 
 static func apply_game_state(main, data: Dictionary) -> Dictionary:
@@ -128,6 +129,10 @@ static func apply_game_state(main, data: Dictionary) -> Dictionary:
 		main._sync_selected_hotbar_item()
 	if main.has_method("_update_hud"):
 		main._update_hud()
+
+	# Restore TimeManager state (autoload, accessed via the scene tree).
+	_restore_time(main, normalized.get("time", {}))
+
 	return {"ok": true, "error": ""}
 
 static func stash_pending_save(root: Node, data: Dictionary) -> void:
@@ -180,6 +185,7 @@ static func normalize_save_data(data: Dictionary) -> Dictionary:
 		"beacons": _vec2_array_from_data(data.get("beacons", [])).map(func(v): return _vec2_to_data(v)),
 		"flares": _flares_to_data(_flares_from_data(data.get("flares", []))),
 		"defeated_bosses": _defeated_bosses_from_data(data.get("defeated_bosses", {})),
+		"time": _time_from_data(data.get("time", {})),
 	}
 
 static func _snapshot_world(world) -> Dictionary:
@@ -794,3 +800,36 @@ static func _defeated_bosses_from_data(data) -> Dictionary:
 	for key in Dictionary(data).keys():
 		result[String(key)] = true
 	return result
+
+## --- TimeManager persistence helpers ---
+
+## Read current TimeManager state into a plain dict for serialisation.
+static func _snapshot_time(main) -> Dictionary:
+	var tm = main.get_node_or_null("/root/TimeManager")
+	if tm == null:
+		return {"hour": 8, "minute": 0, "day": 1}
+	return {
+		"hour":   int(tm.current_hour),
+		"minute": int(tm.current_minute),
+		"day":    int(tm.current_day),
+	}
+
+## Normalise an incoming time dict, applying clamped defaults.
+static func _time_from_data(data) -> Dictionary:
+	var d: Dictionary = data if data is Dictionary else {}
+	return {
+		"hour":   clampi(int(d.get("hour",   8)), 0, 23),
+		"minute": clampi(int(d.get("minute", 0)), 0, 59),
+		"day":    maxi(1, int(d.get("day", 1))),
+	}
+
+## Push a normalised time dict back into the TimeManager autoload.
+static func _restore_time(main, time_data: Dictionary) -> void:
+	var tm = main.get_node_or_null("/root/TimeManager")
+	if tm == null:
+		return
+	tm.current_hour   = clampi(int(time_data.get("hour",   8)), 0, 23)
+	tm.current_minute = clampi(int(time_data.get("minute", 0)), 0, 59)
+	tm.current_day    = maxi(1, int(time_data.get("day",   1)))
+	tm._accumulator   = 0.0
+	# Don't emit hour_changed here — Main.gd calls _update_sky_modulate() on load.

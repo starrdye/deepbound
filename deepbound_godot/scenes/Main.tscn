@@ -36,6 +36,9 @@ fall_catchup_speed = 760.0
 
 [node name="Enemies" type="Node2D" parent="."]
 
+[node name="DayNightModulate" type="CanvasModulate" parent="."]
+color = Color(1, 1, 1, 1)
+
 [node name="HudLayer" type="CanvasLayer" parent="."]
 
 [node name="Hud" type="Control" parent="HudLayer"]

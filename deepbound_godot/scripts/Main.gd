@@ -32,6 +32,7 @@ const StatusEffectCatalog   = preload("res://scripts/catalogs/StatusEffectCatalo
 const StatusManager         = preload("res://scripts/components/StatusManager.gd")
 const LiquidCatalog         = preload("res://scripts/catalogs/LiquidCatalog.gd")
 const ItemCatalog           = preload("res://scripts/catalogs/ItemCatalog.gd")
+const EventCatalog          = preload("res://scripts/catalogs/EventCatalog.gd")
 
 const TEST_CHEST_OFFSET := Vector2(64, -16)
 const TEST_CHEST_OPEN_DISTANCE := 46.0
@@ -87,6 +88,10 @@ var cached_hud_light := 1.0
 var cached_hud_light_tile := Vector2i(999999, 999999)
 var pause_menu_layer: CanvasLayer
 var pause_status_label: Label
+## Day/Night CanvasModulate — references the node added in Main.tscn.
+var _canvas_modulate: CanvasModulate = null
+## Label used for centre-screen event alerts (reused across events).
+var _event_alert_label: Label = null
 var pause_load_button: Button
 var pause_menu_open := false
 var active_craft_stations: Dictionary = {}
@@ -144,6 +149,21 @@ func _ready() -> void:
 	player_status_manager.status_changed.connect(_on_status_changed)
 	if hud.has_method("set_status_manager"):
 		hud.set_status_manager(player_status_manager)
+	# Day/Night CanvasModulate
+	_canvas_modulate = get_node_or_null("DayNightModulate") as CanvasModulate
+	_update_sky_modulate()
+	# Wire TimeManager signals (autoload registered in project.godot).
+	var tm = get_node_or_null("/root/TimeManager")
+	if tm != null:
+		if not tm.hour_changed.is_connected(_on_hour_changed):
+			tm.hour_changed.connect(_on_hour_changed)
+	# Wire EventManager signals.
+	var em = get_node_or_null("/root/EventManager")
+	if em != null:
+		if not em.event_started.is_connected(_on_event_started):
+			em.event_started.connect(_on_event_started)
+		if not em.event_stopped.is_connected(_on_event_stopped):
+			em.event_stopped.connect(_on_event_stopped)
 	world.player = player
 	world.container_parent = props_node
 	if world.has_signal("chest_broken") and not world.chest_broken.is_connected(_on_chest_broken):
@@ -224,6 +244,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
+	# Always update the sky modulate — time passes even while paused or in terminal.
+	_update_sky_modulate()
 	if pause_menu_open:
 		return
 	# Freeze all game input/action processing while the debug terminal is open,
@@ -341,10 +363,96 @@ func _teleport_to_band(tile_y: int) -> void:
 	player.velocity = Vector2.ZERO
 	player.place_beacon()
 
+## Updates the DayNightModulate CanvasModulate color each frame.
+## Blends the sky gradient (from TimeManager) with the event tint (from EventManager).
+func _update_sky_modulate() -> void:
+	if _canvas_modulate == null:
+		return
+	var tm = get_node_or_null("/root/TimeManager")
+	var normalized := 0.458  # default ~11:00 am
+	var sky_color := Color.WHITE
+	if tm != null and tm.has_method("get_normalized_time"):
+		normalized = float(tm.get_normalized_time())
+		sky_color = Color(tm.sky_color_for_normalized(normalized))
+	var em = get_node_or_null("/root/EventManager")
+	var event_tint := Color.WHITE
+	if em != null and em.has_method("get_event_sky_tint"):
+		event_tint = Color(em.get_event_sky_tint())
+	_canvas_modulate.color = sky_color * event_tint
+
+func _on_hour_changed(_new_hour: int) -> void:
+	_update_sky_modulate()
+
+func _on_event_started(event_id: String) -> void:
+	_update_sky_modulate()
+	_show_event_alert(event_id)
+	# Re-trigger the encounter so event spawn overrides kick in immediately.
+	if is_instance_valid(player) and world != null:
+		var band_id := BandCatalog.resolve_band_id(world.world_to_tile(player.global_position).y)
+		_spawn_band_encounter(band_id)
+
+func _on_event_stopped(_event_id: String) -> void:
+	_update_sky_modulate()
+	# Restore normal band encounter.
+	if is_instance_valid(player) and world != null:
+		var band_id := BandCatalog.resolve_band_id(world.world_to_tile(player.global_position).y)
+		_spawn_band_encounter(band_id)
+
+## Shows a tinted centre-screen banner for 4 seconds when an event begins.
+func _show_event_alert(event_id: String) -> void:
+	var ev: Dictionary = EventCatalog.get_event(event_id)
+	if ev.is_empty():
+		return
+	var message: String = String(ev.get("message", event_id))
+	var tint: Color     = Color(ev.get("sky_tint", Color(1.0, 0.65, 0.65)))
+
+	# Reuse or create a dedicated CanvasLayer for event alerts.
+	var layer := get_node_or_null("EventAlertLayer") as CanvasLayer
+	if layer == null:
+		layer = CanvasLayer.new()
+		layer.name  = "EventAlertLayer"
+		layer.layer = 8
+		add_child(layer)
+
+	# Clear any previous alert.
+	for child in layer.get_children():
+		child.queue_free()
+
+	# Full-width label centred near the top of the screen.
+	var label := Label.new()
+	label.text                = message
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.size                 = Vector2(1280, 48)
+	label.position             = Vector2(0, 108)
+	label.add_theme_font_size_override("font_size", 26)
+	label.add_theme_color_override("font_color", tint.lightened(0.15))
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.add_theme_constant_override("outline_size", 3)
+	layer.add_child(label)
+
+	# Auto-dismiss after 4 seconds.
+	get_tree().create_timer(4.0).timeout.connect(func():
+		if is_instance_valid(label):
+			label.queue_free()
+	)
+
 func _spawn_band_encounter(band_id: String) -> void:
 	current_encounter_band = band_id
 	for child in enemies_node.get_children():
 		child.queue_free()
+
+	# If an event with spawn overrides is running, use those instead.
+	var em = get_node_or_null("/root/EventManager")
+	if em != null and em.is_event_active():
+		var ev: Dictionary = EventCatalog.get_event(String(em.active_event_id))
+		var overrides: Array = ev.get("spawn_overrides", [])
+		if not overrides.is_empty():
+			for enemy_id in overrides:
+				var offset := Vector2(randf_range(140.0, 260.0) * (1.0 if randf() > 0.5 else -1.0), 0.0)
+				_spawn_enemy(String(enemy_id), player.global_position + offset)
+			return
+
+	# Normal band encounter.
 	match band_id:
 		"standard_caverns":
 			_spawn_enemy("cave_skitter", player.global_position + Vector2(220, 0))
@@ -1035,6 +1143,57 @@ func _on_terminal_command(cmd: String) -> void:
 					child.queue_free()
 				BossEncounterSystem.end_encounter()
 			TerminalSystem.push_output("[OK] Removed %d enemies and all bosses" % count_killed)
+		"event_start":
+			if parts.size() < 2:
+				TerminalSystem.push_output("[ERR] Usage: event_start <event_id>")
+				TerminalSystem.push_output("  Events: %s" % "  ".join(EventCatalog.all_ids()))
+			else:
+				var eid: String = parts[1]
+				if not EventCatalog.is_valid(eid):
+					TerminalSystem.push_output("[ERR] Unknown event '%s' — available: %s" % [eid, "  ".join(EventCatalog.all_ids())])
+				else:
+					var em = get_node_or_null("/root/EventManager")
+					if em == null:
+						TerminalSystem.push_output("[ERR] EventManager not available")
+					elif em.force_start_event(eid):
+						var ev_name: String = String(EventCatalog.get_event(eid).get("name", eid))
+						TerminalSystem.push_output("[OK] Event started: %s" % ev_name)
+					else:
+						TerminalSystem.push_output("[ERR] Could not start event: %s" % eid)
+		"event_stop":
+			var em = get_node_or_null("/root/EventManager")
+			if em == null:
+				TerminalSystem.push_output("[ERR] EventManager not available")
+			elif not em.is_event_active():
+				TerminalSystem.push_output("[OK] No event is currently running")
+			else:
+				var stopped_name: String = String(EventCatalog.get_event(String(em.active_event_id)).get("name", em.active_event_id))
+				em.force_stop_event()
+				TerminalSystem.push_output("[OK] Event stopped: %s" % stopped_name)
+		"set_time":
+			if parts.size() < 2 or not parts[1].is_valid_int():
+				TerminalSystem.push_output("[ERR] Usage: set_time <0-23>")
+			else:
+				var h := clampi(int(parts[1]), 0, 23)
+				var tm = get_node_or_null("/root/TimeManager")
+				if tm == null:
+					TerminalSystem.push_output("[ERR] TimeManager not available")
+				else:
+					tm.set_hour(h)
+					_update_sky_modulate()
+					TerminalSystem.push_output("[OK] Time set to %02d:00  (day %d)" % [h, int(tm.current_day)])
+		"add_time":
+			if parts.size() < 2 or not parts[1].is_valid_int():
+				TerminalSystem.push_output("[ERR] Usage: add_time <minutes>")
+			else:
+				var mins := int(parts[1])
+				var tm = get_node_or_null("/root/TimeManager")
+				if tm == null:
+					TerminalSystem.push_output("[ERR] TimeManager not available")
+				else:
+					tm.add_minutes(mins)
+					_update_sky_modulate()
+					TerminalSystem.push_output("[OK] Advanced %d min → %s  (day %d)" % [mins, tm.get_time_string(), int(tm.current_day)])
 		"clear":
 			TerminalSystem.clear_history()
 		"help":
@@ -1050,6 +1209,10 @@ func _on_terminal_command(cmd: String) -> void:
 			TerminalSystem.push_output("  debuff <effect_id>          — apply debuff (slow vulnerable curse …)")
 			TerminalSystem.push_output("  clearfx                     — remove all active status effects")
 			TerminalSystem.push_output("  kill                        — remove all active enemies & bosses")
+			TerminalSystem.push_output("  event_start <event_id>      — start world event  (blood_moon goblin_raid meteor_shower)")
+			TerminalSystem.push_output("  event_stop                  — end the current world event")
+			TerminalSystem.push_output("  set_time <0-23>             — jump to an in-game hour (updates sky instantly)")
+			TerminalSystem.push_output("  add_time <minutes>          — fast-forward by N in-game minutes")
 			TerminalSystem.push_output("  clear                       — clear this console")
 			TerminalSystem.push_output("  help                        — show this list")
 		_:

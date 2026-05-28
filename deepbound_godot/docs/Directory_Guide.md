@@ -109,16 +109,21 @@ Read-only static data tables. Each catalog is a single `class_name`d file with `
 
 | File | Purpose |
 |------|---------|
-| `ItemCatalog.gd` | Every item in the game: display name, description, rarity, and category. Used by HUD tooltip and drag-drop. All items (including equippables) must be listed here. |
-| `EquipmentCatalog.gd` | Every equippable item: slot ID, stat deltas (`damage`, `defense`, `health_max`, `speed`, `drill_cool`), and `light_radius_tiles` for utility items. Must parallel `ItemCatalog` entries. |
-| `TileCatalog.gd` | Every foreground tile: hardness, breakable, solid, occlusion, color, drops. Band assignment. |
+| `ItemCatalog.gd` | Every item: display name, description, rarity, category. All items (including equippables and buckets) must be listed here. |
+| `EquipmentCatalog.gd` | Every equippable item: slot ID, stat deltas (`damage`, `defense`, `health_max`, `speed`, `drill_cool`), and `light_radius_tiles` for utility items. |
+| `TileCatalog.gd` | Every foreground tile: hardness, breakable, solid, occlusion, color, drops. Band assignment. Includes `obsidian` (liquid reaction result). |
 | `BackgroundCatalog.gd` | Every background wall: same schema as TileCatalog. |
-| `BandCatalog.gd` | Five underground bands keyed by `id`. Maps tileY ranges to band IDs via `resolve_band_id(y)`. |
-| `EnemyCatalog.gd` | Every enemy: band, health, damage, unlock item. |
+| `BandCatalog.gd` | Seven bands keyed by `id`. Maps tileY ranges to band IDs via `resolve_band_id(y)`. Includes `surface_area` and `solid_dark_blocks`. |
+| `EnemyCatalog.gd` | Every enemy + boss: band, health, damage, speed, aggro radius. Boss unlock items. |
+| `LiquidCatalog.gd` | **v0.11** Liquid type constants (NONE/WATER/LAVA/HONEY), volume caps, colours, reactions (water+lava→obsidian), bucket item map. |
+| `EventCatalog.gd` | **v0.11** World event definitions: name, sky_tint, spawn_overrides, spawn_multiplier. Events: blood_moon, goblin_raid, meteor_shower. |
+| `ModifierCatalog.gd` | **v0.11** Terraria-style item prefix definitions: damage_mult, speed_mult, crit_bonus, tier. Roll pools for weapons and accessories. |
+| `StatusEffectCatalog.gd` | **v0.11** Status effect definitions: duration, stat_modifiers, is_debuff. Factory method `make(effect_id)` returns a `StatusEffectData` resource. |
+| `CraftingRecipeBook.gd` | All crafting recipes keyed by recipe_id: result, result_count, ingredients, required stations. |
 | `NPCCatalog.gd` | Friendly NPCs: name, sprite_key, dialogue node array, shop ID, interact_radius. |
 | `DialogueCatalog.gd` | Dialogue nodes: text, speaker, optional `event` string ("open_shop" etc.). |
 | `VendorCatalog.gd` | Shop stock (item, price) and `get_sell_price(item_id)` for player sell-back. |
-| `VillageCatalog.gd` | Village/settlement metadata: required tiles, props, backgrounds, building order, generation rules. Symbol-to-tile maps. Settlement-specific ID lists. |
+| `VillageCatalog.gd` | Village/settlement metadata: required tiles, props, backgrounds, building order, generation rules. |
 | `PlaceableCatalog.gd` | Items that can be placed back into the world (tiles, containers). |
 | `EconomyModel.gd` | Item pricing and shop value formulas. |
 
@@ -130,20 +135,25 @@ Stateless static helpers or `RefCounted` data objects. Each system owns one conc
 |------|---------|
 | `InventorySystem.gd` | Grid-based inventory with stacking, hotbar, and drag-and-drop logic. `RefCounted`. |
 | `EquipmentSystem.gd` | Manages the 7 equipment slots (`weapon / head / body / legs / feet / accessory / utility`). Validates items against `EquipmentCatalog`. Emits `equipment_changed`. `RefCounted`. |
-| `StatCalculator.gd` | Stateless. `compute(equipment_system)` sums all stat deltas across equipped items. `get_utility_light_radius(equipment_system)` reads torch/lantern radius for World lighting. |
-| `WorldGenerator.gd` | Noise-based terrain generation. `generate_tile_id(seed, tile)` and `generate_background_id(seed, tile)` are the entry points. Also dispatches to `StructureGenerator` for structure overlays. |
-| `StructureGenerator.gd` | Resolves which templates overlap a given chunk, applies tile/background/prop/spawn overlays. Exposes `get_structure_spawns_near`, `get_structure_lights_near`, `get_structure_containers_near`. |
-| `PrefabTemplateRegistry.gd` | Loads, caches, and validates template JSONs from `res://data/templates/` (builtins) and `user://templates/` (user saves). Adding a new `.json` to `data/templates/` is sufficient for worldgen to pick it up automatically. |
-| `PrefabTemplateImporter.gd` | One-shot helpers that programmatically construct a template dict and save it via `PrefabTemplateRegistry.save_template()`. |
-| `ChunkStore.gd` | Memoised per-seed tile lookup. Caches generated + overlaid tile data so chunks are deterministic regardless of generation order. |
+| `StatCalculator.gd` | Stateless. `compute(equipment_system)` sums all stat deltas. `get_utility_light_radius()` reads torch/lantern radius for World lighting. |
+| `WorldGenerator.gd` | Noise-based terrain generation. `generate_tile_id(seed, tile)` and `generate_background_id(seed, tile)` are the entry points. |
+| `StructureGenerator.gd` | Resolves which templates overlap a given chunk, applies tile/background/prop/spawn overlays. |
+| `PrefabTemplateRegistry.gd` | Loads, caches, and validates template JSONs from `res://data/templates/`. Adding a new `.json` is sufficient for worldgen to pick it up. |
+| `PrefabTemplateImporter.gd` | One-shot helpers that programmatically construct and save template dicts. |
+| `ChunkStore.gd` | Memoised per-seed tile lookup. Also owns `liquids: Dictionary` (Vector2i → {type, volume}) for liquid state. |
 | `CollisionSystem.gd` | AABB sweep vs tile grid. Used by `PlayerController` and `EnemyController`. |
 | `SpawnSystem.gd` | Finds valid floor positions near a point for enemy placement. |
 | `MiningSystem.gd` | Tracks per-tile damage, emits break-stage changes, handles drill vs pick multipliers. |
 | `LightingSystem.gd` | Ray-cast light propagation from prop lights and glowglass tiles. |
 | `HeartSystem.gd` | HP tracking, damage application, and heart-display mapping (2 HP per heart). |
-| `CraftingSystem.gd` | Recipe definitions, craftable-status evaluation, station proximity detection. |
-| `SaveGameSystem.gd` | Serialises world state (modified chunks, inventory, position) to `user://saves/slot_1.json`. Schema v3 adds `defeated_bosses`. |
-| `BossEncounterSystem.gd` | Global static singleton for boss encounter state. Holds `defeated_bosses` dict, `encounter_active` flag, and emits `encounter_started / boss_hp_changed / boss_ended / boss_defeated` signals via a lazy singleton instance. No Autoload required — any script calls `BossEncounterSystem.get_instance()`. |
+| `CraftingSystem.gd` | Station detection (6-tile radius), craftable-status evaluation, ingredient consumption. God mode bypasses all checks. |
+| `LiquidSystem.gd` | **v0.11** Pure-static CA engine. `tick(store, world, active_set)` runs gravity + horizontal spread + liquid reactions at 10 Hz. |
+| `TimeManager.gd` | **v0.11** Autoload. 24-hour clock at 0.5 s/min. Signals: `hour_changed`, `day_advanced`. Methods: `set_hour()`, `add_minutes()`, `get_normalized_time()`, `sky_color_for_normalized()`. |
+| `EventManager.gd` | **v0.11** Autoload. Console-driven event director. `force_start_event()` / `force_stop_event()`. Signals: `event_started`, `event_stopped`. `get_event_sky_tint()` returns sky tint Color. |
+| `DebugSystem.gd` | **v0.11** Static flags. `god_mode_enabled: bool`, `toggle_god_mode()`. Read by CraftingSystem and HudController. |
+| `ModifierSystem.gd` | Applies modifier stat multipliers to weapon damage and accessory stats at combat time. |
+| `SaveGameSystem.gd` | Schema-versioned single-slot JSON save/load (schema v3). Includes time persistence via `_snapshot_time()` / `_restore_time()`. |
+| `BossEncounterSystem.gd` | Static singleton for boss encounter state. `defeated_bosses` dict, encounter signals. No Autoload required. |
 
 ### `scripts/boss/`
 
@@ -280,16 +290,18 @@ Python 3 scripts. Not loaded by Godot — run from the terminal.
 
 | File | Purpose |
 |------|---------|
-| `Architecture.md` | High-level system overview: runtime structure, patterns in use, and deep dives into every major system (Inventory, Equipment & Stat Engine, Crafting, NPC/Dialogue/Vendor, InteractableComponent, World & Lighting, Procedural Generation, Save/Load, Health, Controls). Includes a Future Roadmap section. |
-| `Developer_Guide.md` | Comprehensive contributor guide: setup, codebase tour, how every system works with code examples, step-by-step recipes for adding new content, testing patterns, and GDScript 4.6 gotchas. **Start here if you are new to the codebase.** |
-| `Gameplay.md` | Player-facing guide: controls, mining, inventory, hotbar, equipment, NPCs, chests, world drops, health, HUD. |
+| `Architecture.md` | System design: runtime structure, patterns, signal flows, deep dives into every major system. Includes Future Roadmap. |
+| `Developer_Guide.md` | Legacy deep-dive contributor guide (pre-v0.11). Kept for historical reference. |
+| `Gameplay.md` | **v0.11** Player-facing guide: controls, crafting, liquids, day/night, world events, equipment, bosses, console commands. |
 | `Drow_Village_Template.md` | Drow enclave building-kit spec: tile set, prop set, room types. |
 | `Prefab_Template_System.md` | How templates are authored, validated, and applied at worldgen time. |
 | `Art_Production_Package.md` | Art handoff guide: reference board format, crop conventions, palette rules. |
 | `Studio_Sprints_1_5.md` | Sprint history and feature completion log. |
 | `Villager_Sprite_Reference_Sprints.md` | Villager sprite animation spec and frame assignments. |
 | `Goblin_Village_Expansion_Analysis.md` | Design analysis for the goblin village expansion rooms. |
-| `Directory_Guide.md` | **This file.** Folder structure and file-purpose index for AI assistants and new contributors. |
+| `Directory_Guide.md` | **This file.** Folder structure and file-purpose index for AI assistants and contributors. |
+
+> **Primary reference for v0.11:** `DEVELOPER_GUIDE.md` in the project root covers all catalogs, console commands, adding content, and the complete item/tile/enemy tables.
 
 ---
 
@@ -334,10 +346,21 @@ PrefabDesignerController (editor)
 
 ## Band → tileY reference
 
-| Band ID | tileY range | Factions |
-|---------|-------------|---------|
-| `standard_caverns` | 48 – 383 | Goblin |
-| `colossal_ant_chambers` | 384 – 767 | Dwarf |
-| `buried_pyramids` | 768 – 1151 | — |
-| `drow_enclaves` | 1152 – 1535 | Drow |
-| `abyssal_lava_slums` | 1536 + | — |
+| Band ID | tileY range | Factions | Danger |
+|---------|-------------|---------|--------|
+| `surface_area` | −96 → −1 | — | 0 |
+| `standard_caverns` | 0 → 383 | Goblin | 1 |
+| `colossal_ant_chambers` | 384 → 767 | Dwarf | 2 |
+| `buried_pyramids` | 768 → 1151 | — | 3 |
+| `drow_enclaves` | 1152 → 1535 | Drow | 4 |
+| `abyssal_lava_slums` | 1536 → 1919 | — | 5 |
+| `solid_dark_blocks` | 1920 → ∞ | — | 6 |
+
+## Key Autoloads (v0.11)
+
+Registered in `project.godot → [autoload]`. Accessible anywhere via `/root/<Name>`.
+
+| Name | Script | Purpose |
+|---|---|---|
+| `TimeManager` | `scripts/systems/TimeManager.gd` | 24-hour clock, `hour_changed` / `day_advanced` signals, sky colour lookup |
+| `EventManager` | `scripts/systems/EventManager.gd` | Console-driven world events, `event_started` / `event_stopped` signals, sky tint |

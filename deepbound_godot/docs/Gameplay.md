@@ -1,18 +1,21 @@
-# Deepbound Godot Gameplay Guide
+# Deepbound Godot — Gameplay Guide
 
-This guide describes the currently playable Godot prototype systems. It is the gameplay-facing companion to `Architecture.md` and `Developer_Guide.md`.
+> v0.11 · Last updated 2026-05-28
+
+This guide covers everything a player (or tester) needs to know about the current build. For system internals see `Architecture.md`; for adding content see `DEVELOPER_GUIDE.md`.
+
+---
 
 ## Core Loop
 
-The Delver starts in Band 1 near a test chest and a starter cave skitter encounter. The current loop is:
-
-1. Move through deterministic tile chunks.
-2. Drill adjacent blocks until they crack, break, and award drops.
-3. Collect resources into the personal inventory.
-4. Manage resources through the extra hotbar, chest inventory, and world drops.
-5. **Equip gear** found or crafted — armour increases defense, boots increase speed, a torch widens the light radius.
-6. **Talk to NPCs** using `T` — merchants sell gear, miners share lore, hermits offer quests.
-7. Watch health, drill heat, local light, and danger while descending through template-backed settlements.
+1. Move through procedurally generated tile chunks.
+2. Drill adjacent blocks — they crack, break, and drop materials.
+3. Collect resources into your 24-slot inventory + 6-slot hotbar.
+4. Craft gear at a Workbench / Furnace / Anvil (or use **god mode** for free crafting).
+5. Equip weapons, armour, and accessories to boost your stats.
+6. Manage liquids — scoop water or honey with a bucket, pour lava to create obsidian.
+7. Watch the sky cycle from dawn to dusk — events like a Blood Moon change the world.
+8. Descend through band settlements, fight enemies, defeat bosses.
 
 ---
 
@@ -20,396 +23,401 @@ The Delver starts in Band 1 near a test chest and a starter cave skitter encount
 
 | Action | Input |
 |--------|-------|
-| Move | `A / D` or left/right arrows |
+| Move | `A / D` or left / right arrows |
 | Jump | `W`, up arrow, or space |
-| Drill | Hold left mouse or `F` |
+| Drill (hold) | Hold left mouse or `F` |
 | Use / place hotbar item | Right mouse |
 | Strike (melee) | `E` |
 | Interact with NPC | `T` |
-| Inventory | `I` |
-| Pause / menu | `Escape` |
+| Inventory + Equipment + Crafting | `I` |
+| Close open panel / pause menu | `Escape` |
 | Hotbar select | `1–6` or mouse wheel |
 | Flare | `Q` |
 | Beacon | `R` |
-| Prototype band jumps | `F1`, `F2`, `F3` |
-| Debug terminal | `` ` `` (backtick) — toggle open/close |
+| Developer console | `` ` `` (tilde) — toggle |
 
-Focus-loss protection clears transient input when the app window loses or regains focus, so returning to the game should not leave the Delver stuck walking in one direction.
+**ESC priority chain:** closes Dialogue → Vendor → Container → Inventory → Pause menu.
 
 ---
 
-## Main Menu and Saves
+## Main Menu & Saves
 
-The game boots to `MainMenu.tscn`. From there the player can start a fresh world, load the single save slot, open the prefab designer, or quit.
+Boot scene is `MainMenu.tscn`. Options: **Start World**, **Continue** (single save slot), Prefab Designer, Quit.
 
-The Escape pause menu in the world supports Resume, Save, Load, Template Editor, Main Menu, and Quit. Save/load uses one slot at `user://saves/slot_1.json`.
+The Escape pause menu in-world has: Resume, Save, Load, Template Editor, Main Menu, Quit.
 
-Saved games restore the seed, player state, inventory and hotbar, selected hotbar index, tile/background edits, damage, containers, drops, beacons, flares, and generated chunks. Explored/generated chunks are frozen in the save so later template edits do not rewrite already-visited areas; unexplored chunks still use current templates when generated. Enemies are refreshed after load rather than serialised.
+Save file: `user://saves/slot_1.json` — schema **v3**. Saves include:
+- Seed, tile overrides, tile damage, generated chunks, liquid state
+- Player position, velocity, health
+- Inventory, hotbar, selected slot
+- Equipment slots and modifiers
+- All container (chest) inventories
+- Floor drops, beacons, flares
+- Defeated boss flags
+- **Current time of day** (hour / minute / day)
 
 ---
 
 ## Health and Hearts
 
-Health is stored as hit points while the HUD renders hearts.
+| Value | Default |
+|-------|---------|
+| Max HP | 10 |
+| HP per heart | 2 |
+| Default display | 5 full hearts |
 
-- Default max HP: `10`
-- One heart: `2` HP
-- Default display: five full hearts
-- Heart states: full, half, empty
-- Equipment can raise max HP through an HP delta (`health_max` stat). `HeartSystem.gd` rounds to heart-friendly values and clamps the minimum to one heart.
+Equipment raises max HP via the `health_max` stat delta. Death resets the session.
 
 ---
 
 ## Mining and Drops
 
-Mining targets the nearest valid tile in the drill direction. Tile definitions control hardness, breakability, drops, colours, and light blocking.
+Left-click / hold `F` to drill the nearest tile in your facing direction. Each tile has a `hardness` value; repeated hits reduce it to zero and break it.
 
-Break feedback is material-specific. Dirt, stone, copper, resin, sandstone, drow materials, pressure plates, cursed treasure, and other tile classes each have matching crack/break sheets under `assets/effects/` so breaking reads as a transformation of that material rather than a generic overlay.
+Break animations are material-specific (5 crack stages per tile).
 
-When a tile breaks, its drops try to enter the player inventory. If inventory space is unavailable, remaining drops can stay or be spawned into the world.
+When a tile breaks its loot tries to enter your inventory; overflow lands as floor drops.
 
 ---
 
-## Loot Drops (Enemy Kills and Boss Rewards)
+## Day / Night Cycle
 
-Enemy kills and boss deaths spawn **physics loot drops** — small items that physically pop out with a random upward arc, bounce off terrain, spin through the air, and then magnetically fly to the player when they get close.
+Time advances automatically at **0.5 real seconds per in-game minute** (1 real second = 2 in-game minutes). The sky colour transitions smoothly through 24 colour keyframes.
 
-### Pickup
+| Hour range | Appearance |
+|---|---|
+| 00:00 – 04:00 | Deep night (near-black) |
+| 05:00 – 06:00 | Pre-dawn purple / sunrise orange |
+| 07:00 – 08:00 | Golden hour → morning |
+| 09:00 – 15:00 | Full daylight |
+| 17:00 – 18:00 | Afternoon → sunset orange |
+| 19:00 – 20:00 | Dusk red → twilight |
+| 21:00 – 23:00 | Night |
+
+The HUD is unaffected by sky tint (it lives in a separate CanvasLayer).
+
+Console shortcuts: `set_time 6` (sunrise), `set_time 0` (midnight), `add_time 120` (+2 hours).
+
+---
+
+## World Events
+
+Events are triggered through the developer console. They never fire automatically.
+
+| Event ID | Name | Sky tint | Enemy change |
+|---|---|---|---|
+| `blood_moon` | Blood Moon | Deep red | Cave skitters, Soldier ants, Mummy sentries ×2 |
+| `goblin_raid` | Goblin Raid | Yellow | Cave skitters, Worker ants ×3 |
+| `meteor_shower` | Meteor Shower | Lavender | No change — visual only |
+
+When an event starts:
+- Sky colour is multiplied by the event tint on top of the normal day/night colour.
+- A 4-second banner alert appears at the top of the screen.
+- `_spawn_band_encounter` substitutes event enemies for the current band enemies.
+
+```
+event_start blood_moon
+event_stop
+```
+
+---
+
+## Liquids & Buckets
+
+Three liquid types exist in the world: **Water**, **Lava**, and **Honey**. Each simulates as a cellular automaton — liquids fall under gravity and equalise horizontally at 10 Hz.
+
+| Liquid | Colour | Behaviour |
+|---|---|---|
+| Water | Blue | Flows fast, spreads widely |
+| Lava | Orange | Medium flow speed |
+| Honey | Gold | Slow, viscous spread |
+
+**Reaction:** Water + Lava = `obsidian` tile placed at the contact point.
+
+### Bucket Mechanics
+
+| Action | How |
+|---|---|
+| Scoop a liquid tile (volume = 8) | Right-click with `empty_bucket` equipped |
+| Pour liquid | Right-click an empty air tile with a filled bucket |
+
+Bucket items: `empty_bucket`, `water_bucket`, `lava_bucket`, `honey_bucket`.
+
+The test chest near spawn contains 1× `empty_bucket` and 5× `water_bucket`.
+
+---
+
+## Loot Drops (Enemy Kills / Boss Rewards)
 
 | Phase | What happens |
 |-------|-------------|
-| **0 – 0.5 s** | Drop is semi-transparent; cannot be picked up (pickup delay). Falls and bounces. |
-| **After 0.5 s** | `can_be_picked_up = true`. Click to collect, or enter magnet radius (90 px). |
-| **Magnet** | Within 90 px the drop flies toward the player, speeding up quadratically as it closes in. |
-| **Collect** | Absorbed automatically within 14 px, or on left-click. |
+| 0 – 0.5 s | Semi-transparent, cannot be picked up. Falls and bounces. |
+| After 0.5 s | Collectible. Click, or enter the 90 px magnet radius. |
+| Magnet | Flies toward the player, accelerating as it closes. |
+| Collect | Auto-absorbed within 14 px or on left-click. |
 
-### Rarity Glow
-
-Items with higher rarity show a coloured ring around the drop so you can spot them at a glance:
-
-| Rarity | Glow colour |
-|--------|-------------|
-| Common | None |
-| Uncommon | Green |
-| Rare | Blue |
-| Epic | Purple |
-| Legendary | Gold |
+Rarity glow: Common = none · Uncommon = green · Rare = blue · Epic = purple · Legendary = gold.
 
 ### Enemy Drop Tables
 
-Each enemy has an independent per-slot chance roll. Multiple items can drop from one kill.
-
 | Enemy | Drops |
 |-------|-------|
-| Cave Skitter | Dirt Clod (60 %), Copper Nugget (25 %) |
-| Goblin Grunt | Stone Chunk (65 %), Copper Nugget (40 %) |
-| Goblin Shaman | Copper Nugget (70 %), Resin Shard (20 %) |
-| Soldier Ant | Copper Nugget (65 %), Resin Shard (35 %) |
-| Mummy Sentry | Sandstone Shard (70 %), Copper (55 %), Cursed Relic (5 %) |
+| Cave Skitter | Dirt Clod (60%), Copper Nugget (25%) |
+| Goblin Grunt | Stone Chunk (65%), Copper Nugget (40%) |
+| Goblin Shaman | Copper Nugget (70%), Resin Shard (20%) |
+| Soldier Ant | Copper Nugget (65%), Resin Shard (35%) |
+| Mummy Sentry | Sandstone Shard (70%), Copper (55%), Cursed Relic (5%) |
 | Giant Ant Queen (boss) | 12× Copper, 8× Stone, 4× Resin |
+
+---
+
+## Crafting
+
+### Opening the Crafting Panel
+
+Press **`I`** to open the inventory. The crafting panel appears to the **left** of the inventory grid automatically. It shows up to **10 recipes at once**; scroll the mouse wheel over the panel to see more. **▲** and **▼** arrows appear when there are hidden recipes above or below.
+
+### Station Requirements
+
+Stand within **6 tiles** of a station to unlock its recipes.
+
+| Station | Unlocks |
+|---|---|
+| *(none)* | Hand-craft recipes (walls, workbench) |
+| Workbench | Basic tools and placeables |
+| Workbench + Furnace | Metal gear tier |
+| Workbench + Anvil | Crystal gear tier |
+| Workbench + Furnace + Anvil | Cursed / endgame tier |
+
+### Current Recipes
+
+#### Hand-craft
+
+| Result | Ingredients |
+|---|---|
+| Workbench | 8× stone_chunk + 12× dirt_clod |
+| Dirt Wall ×2 | 1× dirt_clod |
+| Stone Wall ×2 | 1× stone_chunk |
+| Wooden Wall ×2 | 2× dirt_clod |
+
+#### Workbench
+
+| Result | Ingredients |
+|---|---|
+| Wooden Sword | 5× stone_chunk |
+| Hammer | 8× stone_chunk |
+| Chest | 4× stone_chunk + 4× dirt_clod |
+| Furnace | 20× stone_chunk + 5× copper_nugget |
+
+#### Workbench + Furnace
+
+| Result | Ingredients |
+|---|---|
+| Anvil | 10× stone_chunk + 20× copper_nugget |
+
+#### Workbench + Anvil
+
+| Result | Ingredients |
+|---|---|
+| Crystal Sword | 10× resin_shard + 15× copper_nugget |
+| Crystal Drill | 8× resin_shard + 20× copper_nugget |
+
+#### Workbench + Furnace + Anvil
+
+| Result | Ingredients |
+|---|---|
+| Cursed Sword | 5× obsidian_chip + 1× cursed_relic + 3× drow_silk |
+| Cursed Drill | 8× obsidian_chip + 2× cursed_relic + 15× copper_nugget |
+
+### God Mode Crafting
+
+Enable god mode (`god` in console): **all recipes are free** — no station proximity required and no materials consumed. The crafting panel footer shows a gold **★ God Mode (N)** label on an orange background, and all recipes render at full brightness.
 
 ---
 
 ## Equipment
 
-### Overview
+Press `I` to open inventory. The equipment panel appears as a 7-slot column to the **right** of the inventory grid. Drag an item onto its slot to equip it; drag from a slot back to inventory to unequip. Stats update immediately.
 
-Press `I` to open the inventory. The **equipment panel** appears as a 7-slot column to the right of the inventory grid. Drag any equippable item from the inventory or hotbar and drop it onto the correct slot to equip it. Drag from an equipment slot back to inventory (or anywhere outside all panels) to unequip.
+### Slots & Stats
 
-### Equipment Slots
-
-| Slot | Effect stat(s) |
-|------|----------------|
-| Weapon | `damage` — added to melee strike damage |
+| Slot | Stat |
+|------|------|
+| Weapon | `damage` — added to melee strike |
 | Head | `defense`, `health_max` |
 | Body | `defense` |
 | Legs | `defense` |
 | Feet | `defense`, `speed` |
 | Accessory | `defense`, `health_max`, `drill_cool` |
-| Utility | `light_radius_tiles` (widens the ambient light circle) |
+| Utility | `light_radius_tiles` |
 
-Stats update **immediately** when an item is equipped or unequipped — there is no "apply" button.
-
-### Current Equippables
+### Equippable Items
 
 | Item | Slot | Stats |
 |------|------|-------|
-| Wooden Sword | Weapon | +3 damage |
-| Crystal Sword | Weapon | +6 damage |
-| Cursed Sword | Weapon | +10 damage |
-| Iron Helm | Head | +2 defense |
-| Crystal Helm | Head | +4 defense, +5 max HP |
-| Leather Vest | Body | +1 defense |
-| Iron Chestplate | Body | +4 defense |
-| Leather Pants | Legs | +1 defense |
-| Iron Greaves | Legs | +2 defense |
-| Leather Boots | Feet | +1 defense, +10% speed |
-| Copper Ring | Accessory | +5 max HP |
-| Resin Amulet | Accessory | +1 defense, −10% drill heat |
-| Torch | Utility | 10-tile light radius |
-| Lantern | Utility | 17-tile light radius |
-
-### Slot Validation
-
-Dropping the wrong item type onto a slot silently rejects the drop — the item stays on the cursor. Only items whose slot matches the target slot are accepted. For example, leather boots cannot go in the weapon slot.
+| Wooden Sword | weapon | damage +3 |
+| Crystal Sword | weapon | damage +6 |
+| Cursed Sword | weapon | damage +10 |
+| Iron Helm | head | defense +2 |
+| Crystal Helm | head | defense +4, max HP +5 |
+| Leather Vest | body | defense +1 |
+| Iron Chestplate | body | defense +4 |
+| Leather Pants | legs | defense +1 |
+| Iron Greaves | legs | defense +2 |
+| Leather Boots | feet | defense +1, speed +10% |
+| Copper Ring | accessory | max HP +5 |
+| Resin Amulet | accessory | defense +1, drill heat −10% |
+| Torch | utility | 10-tile light radius |
+| Lantern | utility | 17-tile light radius |
 
 ---
 
-## Debug Terminal
+## Item Modifiers (Prefixes)
 
-Press `` ` `` (backtick) to open the debug console. Press `` ` `` again to close it. The terminal **stays open after pressing Enter** so you can run multiple commands without reopening it.
+Weapons and accessories can carry a Terraria-style modifier prefix. Applied on craft (30% chance) or via the `modifier` console command.
 
-### Output panel
+Full modifier list: `legendary godly demonic keen sharp heavy swift lucky menacing violent warding quick broken blunt`
 
-The terminal shows the last 8 lines of output above the input field. Lines are colour-coded:
+| Modifier | Tier | Key effect |
+|---|---|---|
+| Legendary / Godly | legendary | +15% damage, +crit |
+| Demonic | rare | +15% damage, +10% crit |
+| Sharp | uncommon | +10% damage |
+| Swift / Quick | uncommon | +8–15% attack speed |
+| Warding | uncommon | +2 defense |
+| Broken / Blunt | broken | −25% damage / knockback |
 
-| Colour | Meaning |
-|--------|---------|
-| Blue-white `>` | Echoed command |
-| Green `[OK]` | Success |
-| Red `[ERR]` | Error or bad usage |
-| Light grey | Info (help list, etc.) |
+---
 
-### Commands
+## Status Effects
+
+| Effect | Type | Duration | Stat change |
+|---|---|---|---|
+| Swiftness | buff | 30 s | speed +15% |
+| Endurance | buff | 25 s | defense +3 |
+| Fervor | buff | 20 s | damage +3 |
+| Fortitude | buff | 30 s | max HP +20 |
+| Vigor | buff | 20 s | damage +2, speed +10% |
+| Slow | debuff | 10 s | speed −20% |
+| Vulnerable | debuff | 10 s | defense −2 |
+| Weakness | debuff | 10 s | damage −2 |
+| Curse | debuff | **permanent** | damage −2, speed −10% |
+| Frail | debuff | 12 s | defense −3, max HP −10 |
+
+Use `clearfx` to remove all active effects.
+
+---
+
+## Developer Console
+
+Open / close with **`` ` ``** (tilde). Type a command and press **Enter**. The terminal stays open between commands.
+
+Output colour: `[OK]` green · `[ERR]` red · echoed command blue-white.
 
 | Command | Effect |
-|---------|--------|
-| `god` | Toggle god mode — player becomes invincible and can fly through blocks |
-| `heal` | Restore player to full HP |
-| `tp <1\|2\|3>` | Teleport to Band 1, 2, or 3 |
-| `give <item_id> [count]` | Add items directly to inventory (e.g. `give crystal_helm`) |
-| `spawn <enemy_id>` | Spawn an enemy near the player (e.g. `spawn goblin_grunt`) |
-| `npc <npc_id>` | Spawn a friendly NPC near the player (e.g. `npc wandering_merchant`) |
-| `boss <boss_id>` | Spawn a boss near the player (e.g. `boss giant_ant_queen`) |
-| `kill` | Remove all active enemies and bosses from the world |
-| `clear` | Clear the output history |
-| `help` | Print the full command list |
-
-**God mode** makes the player immune to all damage and allows free vertical movement (fly/noclip). Toggle it off by running `god` a second time — the gold **GOD MODE ON** button in the top-right corner shows the current state.
+|---|---|
+| `god` | Toggle god mode (invincible + fly + free crafting) |
+| `heal` | Restore full HP |
+| `tp <1\|2\|3>` | Teleport to Band 1 / 2 / 3 |
+| `give <id> [count] [modifier]` | Give items (`give crystal_sword 1 legendary`) |
+| `modifier <mod> [slot]` | Apply modifier to equipped item |
+| `buff <effect_id>` | Apply buff |
+| `debuff <effect_id>` | Apply debuff |
+| `clearfx` | Remove all status effects |
+| `kill` | Despawn all enemies and bosses |
+| `respawn monster <id>` | Spawn enemy near player |
+| `respawn npc <id>` | Spawn friendly NPC near player |
+| `respawn boss <id\|1>` | Reset + spawn boss |
+| `event_start <id>` | Start world event |
+| `event_stop` | End current event |
+| `set_time <0-23>` | Jump to in-game hour |
+| `add_time <minutes>` | Fast-forward time |
+| `clear` | Clear console output |
+| `help` | Print command list |
 
 ---
 
 ## NPCs and Dialogue
 
-### Finding NPCs
+Three NPCs spawn near player start: Wandering Merchant, Old Miner, Cave Hermit (all use goblin sprite sheets). Walk close → `[T] Talk` hint appears. Press `T` to open dialogue.
 
-Three friendly NPCs spawn right next to the player start position each session:
+**Vendor panel:** left-click to buy, right-click an inventory item to sell. Currency: copper nuggets.
 
-| NPC | Goblin model | Position |
-|-----|-------------|----------|
-| Wandering Merchant | Goblin Shaman | +48 px right of spawn |
-| Old Miner | Goblin Grunt | −48 px left of spawn |
-| Cave Hermit | Goblin Slinger | +96 px right of spawn |
-
-NPCs use goblin sprite sheets for their visuals and play a slow idle animation. Walk close to one and a **`[T] Talk`** hint floats above their name. The hint disappears when you move out of range.
-
-Additional NPCs can be spawned via the debug terminal: `npc <npc_id>`.
-
-### Talking
-
-Press `T` while in range to begin dialogue. The dialogue panel opens at the bottom of the screen with:
-
-- Portrait box (left)
-- NPC name (above the text)
-- Typewriter text animation (~42 characters per second)
-
-While text is animating, press `T` again to skip to the end instantly. When the text is fully shown, press `T` to advance to the next node, or close the dialogue if it is the last node.
-
-### Vendor / Shop
-
-Some dialogue nodes trigger the vendor panel (e.g. "Browse wares" on the Wandering Merchant). The vendor panel opens alongside the inventory:
-
-- **Buy**: Left-click a shop item to purchase it (deducts copper nuggets).
-- **Sell**: Right-click an inventory item while the vendor panel is open to sell it.
-- Currency: copper nuggets. Current copper count is shown in the vendor panel header.
-
----
-
-## Settlements and Templates
-
-Underground settlements are generated from sparse prefab templates under `data/templates/`. These templates stamp foreground tiles, background walls, props, lights, containers, and enemy/NPC spawn markers into deterministic spawn regions.
-
-Current built-in templates:
-
-- `goblin_village_full`: Band 1 `standard_caverns`, imported from the original goblin village generator.
-- `dwarf_fortress_full`: Band 2 `colossal_ant_chambers`, built from granite brick, cut granite floors, ironbound supports, rune blocks, forge walls, ladders, bridge decks, lanterns, chests, and dwarf spawn markers.
-- `dwarf_settlement_full`: Band 2 `colossal_ant_chambers`, a multi-level settlement with a great hall, forge, bridge decks, backdrop homes, lights, containers, and dwarf spawn markers.
-
-Developers can launch `scenes/PrefabDesigner.tscn` to author or edit templates using the same in-game tile, background, prop, and enemy catalogs.
+Additional NPCs: `respawn npc <npc_id>`
 
 ---
 
 ## Inventory
 
-The player inventory uses `InventorySystem.gd`.
+- Player slots: **24**
+- Hotbar: **6** (separate from main slots)
+- Default stack cap: **99**
 
-- Player slots: `24`
-- Default stack cap: `99`
-- Hotbar display: six extra slots that do not consume the 24 inventory slots
-- Chest test inventory: `18` slots
-
-Stack rules:
-
-- Dropping onto an empty slot moves the cursor stack there.
-- Dropping onto a matching stack merges up to the slot stack cap.
-- Dragging is a preview until mouse release; source and target slots do not commit early.
-- Merge overflow returns to the original source slot after release.
-- Dropping onto a different item swaps the source and target stacks.
+Stack rules: empty slot = move · matching = merge (overflow back to source) · different item = swap · outside panels = world drop.
 
 ---
 
 ## Hotbar
 
-The hotbar is always visible during normal gameplay and acts as six extra storage slots separate from the player's 24-slot inventory grid.
-
-- Hotbar size: `6` slots
-- Selection: number keys `1–6`
-- Cycling: mouse wheel up/down
-- Drag/drop: items can be moved between the inventory panel, chest panel, equipment panel, and visible hotbar slots
-- Commit timing: hotbar and inventory data update only on mouse release
-- Visual feedback: copper corner brackets mark the active slot
-- Active item label: bottom-left HUD text names the selected stack
-- Placement: right-click places mapped hotbar items on clear reachable tiles after player-overlap and occupancy checks
-- Placement reach: `5.25` tiles
-- Placement preview: the target tile is highlighted while a placeable hotbar item is selected; valid targets are green, rejected targets are red
-
-Current placeable item mappings:
-
-| Item | Places tile |
-|------|-------------|
-| `chest` | `chest_block` |
-| `dirt_clod` | `loose_dirt` |
-| `stone_chunk` | `soft_stone` |
-| `resin_shard` | `hardened_resin` |
-| `sandstone_shard` | `sandstone_block` |
+- Selection: `1–6` or mouse wheel
+- Active slot: copper bracket highlight + bottom-left name label
+- Right-click places held placeable on nearest valid tile (reach: 5.25 tiles)
+- Placement preview: green = valid, red = rejected
 
 ---
 
 ## Chests and Containers
 
-A block-backed test chest spawns near the first spawn area.
-
-- Chest open distance: `46 px`
-- Chest inventory size: `18` slots
-- Default test contents: `6` copper nuggets and `12` stone chunks
-- The chest opens only when the Delver is in range and the player right-clicks directly on it.
-- The chest automatically closes when the Delver walks away.
-- Left-click mining damages and breaks the chest block.
-- Breaking a chest drops one empty `chest` item and spills each non-empty inventory stack as separate world drops.
-
-Pressing `I` opens only the player inventory. Right-clicking a nearby chest opens the container view, and the HUD shows both inventories at once: player panel on the left, chest panel on the right.
-
-Closing a container flushes the held cursor stack back into the player inventory where possible. Any remaining cursor stack is emitted as a world drop instead of being destroyed.
-
----
-
-## Drag, Drop, and World Items
-
-When a stack is picked up from any open inventory panel, releasing it outside all open panels turns it into a physical world item.
-
-- Entity: `DroppedItemController.gd`
-- Spawn point: the Delver's current bottom-centre position
-- Physics: gravity, floor/wall collision, solver substeps prevent dropped items passing through solid blocks
-- Pickup delay: `0.55 s`
-- Pickup method: click the visible item in the world
-- World drag: press and drag a visible dropped item to reposition it, then release to let physics resume
-- Special auto-pickup: only explicit boss, quest, or scripted reward drops opt in to automatic collection
-
-Normal player-dropped stacks fall from the Delver's current position, settle on terrain, and stay there until the player clicks them.
-
----
-
-## Pickup Rules
-
-Normal dropped items are collected by direct click after they land or while falling. Collection still respects inventory capacity. If the mouse moves more than a small drag threshold before release, the item is moved through the world instead of collected.
-
-Collected items fill the hotbar before the main inventory: existing hotbar stacks are topped off first, then empty hotbar slots fill left to right, then the main inventory is used.
-
-While an inventory stack or world item is being dragged, the Delver ignores movement, jump, drill, weapon, flare, and beacon inputs.
-
----
-
-## HUD
-
-The Godot HUD is a crisp `Control` overlay rendered in immediate-mode `_draw()`. It shows:
-
-- **Hearts** — current health as full/half/empty heart icons
-- **Drill heat** — percentage bar; overheating locks the drill briefly
-- **Depth band** — current band name (e.g. "Band 1 — Standard Caverns")
-- **Target tile name** — name of the tile under the drill cursor
-- **Local light** — percentage of ambient light at the player's position
-- **Danger pulse** — red overlay pulsing when enemies are near
-- **Hotbar** — always visible; active slot highlighted with copper brackets
-- **Inventory panel** (when `I` is pressed) — 24-slot grid + equipment column + crafting panel
-- **Container panel** (when a chest is open) — chest's 18-slot grid alongside inventory
-- **Equipment panel** (alongside inventory) — 7-slot column: weapon, head, body, legs, feet, accessory, utility
-- **Dialogue panel** (during NPC conversation) — portrait, typewriter text, hint
-- **Vendor panel** (during shop) — stock list, prices, sell mode
-
-The HUD is edge-biased so it does not cover the Delver or the immediate mining target during normal play.
-
----
-
-## Current Acceptance Checks
-
-The current gameplay systems are covered by these Godot test scripts:
-
-- `tests/smoke_tests.gd`: project boot, bands, mining, economy, lighting, Sprint 4/5 hooks, scene instantiation
-- `tests/equipment_tests.gd`: EquipmentCatalog queries, EquipmentSystem slot mutations, StatCalculator totals, HudController equipment panel drag-drop
-- `tests/inventory_tests.gd`: stack merge/swap, hotbar drag/drop, manual world-item dragging, click pickup, special auto-pickup
-- `tests/heart_tests.gd`: full, half, and empty heart logic
-- `tests/chest_tests.gd`: block-backed chest open/close, mining spill drops, hotbar placement, placement rejection
-- `tests/collision_tests.gd`: swept tile collision, dropped item collision, and anti-embedding rules
-- `tests/spawn_tests.gd`: enemy spawn clearance
-- `tests/background_tests.gd`: background wall placement and break behaviour
-- `tests/input_tests.gd`: jump, focus-loss, inventory key, and hotbar key/scroll behaviour
-- `tests/animation_tests.gd`: drill and weapon animation state
-- `tests/asset_tests.gd`: generated pixel assets, source boards, previews, and material break sheets
-- `tests/menu_tests.gd`: main menu button handlers, load-game path, and safe quit behaviour
-- `tests/save_game_tests.gd`: single-slot save/load round trips, generated chunk freezing, frozen structures, schema compatibility
-- `tests/village_template_tests.gd`: legacy village catalog metadata and building templates
-- `tests/goblin_village_tests.gd`: goblin village reference generation and template-backed chunk overlays
-- `tests/prefab_template_tests.gd`: prefab JSON validation, designer operations, import, and worldgen integration
-- `tests/dwarf_fortress_tests.gd`: Band 2 dwarf fortress assets, template validation, spawning, lights, containers, chunk overlay stability
-- `tests/dwarf_settlement_tests.gd`: Band 2 dwarf settlement template validation, generated placement, lights, containers, prop drawing
-- `tests/movement_perf_tests.gd`: cached terrain redraw, camera movement, chunk warm-ahead, template-heavy fall regressions
-- `tests/boss_tests.gd`: BossEncounterSystem signals/defeated flags, BossStateMachine FSM transitions, BossEntity damage/death/flee, SaveGameSystem v3 schema round-trip
+- Open distance: **46 px** (right-click chest tile)
+- Inventory size: **18 slots**
+- Test chest contents: 6× copper_nugget, 12× stone_chunk, 1× empty_bucket, 5× water_bucket
+- Chest auto-closes when the player walks away
+- Breaking a chest drops 1× chest item and spills its inventory as floor drops
 
 ---
 
 ## Boss Encounters
 
-Boss fights are opt-in encounters — they do not start automatically in the current prototype. Use the debug terminal (`boss giant_ant_queen`) or approach a trigger zone to start a fight.
+| Boss | Band | HP | Dmg | Unlock drop |
+|---|---|---|---|---|
+| Rootbound Foreman | 1 | 420 | 18 | copper_brace |
+| Amber Queen | 2 | 760 | 26 | royal_jelly |
+| Pharaoh of the Buried Sun | 3 | 920 | 32 | cursed_relic |
+| Drow Matriarch | 4 | 1100 | 38 | drow_silk |
+| Obsidian Baron | 5 | 1360 | 44 | heat_core |
 
-### Health Bar HUD
+A top-centre HP bar appears during fights (red >50%, orange 25–50%, bright-red <25%). Boss flees if player is > 1500 px away (not counted as defeated). Defeated bosses are saved.
 
-When a boss fight starts a health bar appears at the top-centre of the screen showing:
+Console: `respawn boss rootbound_foreman` or `respawn boss 1`
 
-- Boss name (above bar)
-- Coloured fill — red (>50 %), orange (25–50 %), bright-red (<25 %)
-- Current / maximum HP text inside the bar
+---
 
-The bar disappears automatically when the boss dies or flees.
+## HUD Overview
 
-### Terraria-Style Dynamic Despawn
+| Element | Notes |
+|---|---|
+| Hearts | Top-left — full / half / empty heart icons |
+| Drill heat | Bar below hearts; overheating locks the drill briefly |
+| Depth label | Band name + metres |
+| Target tile | Name of tile under cursor |
+| Local light % | Ambient light at player position |
+| Danger pulse | Red screen overlay when enemies are near |
+| Hotbar | Bottom-centre, always visible |
+| God Mode indicator | Gold top-right label (when active) |
+| Boss HP bar | Top-centre (during boss fight) |
+| Event alert banner | Upper screen for 4 s on event start |
 
-There is no fixed arena or bounding box. If the player moves more than **1500 px** away from the boss, the boss enters its **Flee** state and despawns after 4 seconds. The health bar is hidden when this happens. The boss is **not** marked as defeated on a flee — it can be re-encountered.
+---
 
-### Defeat and Persistence
+## Settlements and Templates
 
-On death the boss emits loot drops and is recorded in `BossEncounterSystem.defeated_bosses`. Defeated bosses are saved to `slot_1.json` (schema v3) and will not respawn after a reload.
+Structures are stamped into chunks from `data/templates/*.json`.
 
-### Current Bosses
+| Template | Band | Type |
+|---|---|---|
+| `goblin_village_full` | Band 1 | Goblin outpost |
+| `dwarf_fortress_full` | Band 2 | Dwarf military fortress |
+| `dwarf_settlement_full` | Band 2 | Dwarf civilian settlement |
+| `drow_village_full` | Band 4 | Drow enclave |
 
-| Boss ID | Band | HP | Damage | Notes |
-|---------|------|----|--------|-------|
-| `giant_ant_queen` | 2 — Colossal Ant Chambers | 300 | 12 | Prototype art; drops copper, stone, resin |
-
-### Boss FSM States
-
-| State | Trigger to enter | Trigger to leave |
-|-------|-----------------|-----------------|
-| **Idle** | Start / return from attack | Player enters aggro radius (360 px) |
-| **Chase** | Player enters aggro radius | Attack range reached OR despawn radius exceeded |
-| **Attack** | Within attack range (44 px) | Player moves away; fires every 1.2 s |
-| **Flee** | Player > 1500 px away OR player dead | Despawns after 4 s |
+Edit templates live in `scenes/PrefabDesigner.tscn` — changes apply to unvisited chunks immediately.
